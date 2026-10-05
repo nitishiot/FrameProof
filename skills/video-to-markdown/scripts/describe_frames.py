@@ -11,7 +11,8 @@ Usage:
     python describe_frames.py work/frames.json [--model claude-sonnet-5-5] [--ocr]
 
 Writes work/frame_content.json. Frames that fail after retries (rate limits, truncated
-or refused replies) go to work/failed_frames.json and the script exits non-zero.
+or refused replies) go to work/failed_frames.json and the script exits non-zero;
+re-run with --retry-failed to process only those and merge them into frame_content.json.
 """
 
 import argparse
@@ -125,15 +126,29 @@ def main():
     ap.add_argument("--ocr", action="store_true",
                     help="run tesseract and pass the text alongside the image")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--retry-failed", action="store_true",
+                    help="re-run only the frames in failed_frames.json and merge them "
+                         "into the existing frame_content.json")
     args = ap.parse_args()
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         sys.exit("Set ANTHROPIC_API_KEY first.")
 
-    manifest = json.loads(Path(args.manifest).read_text())
-    frames = manifest["frames"]
-    print(f"Extracting content from {len(frames)} frames with {args.model}...")
+    out = Path(args.manifest).parent / "frame_content.json"
+    fail_path = out.parent / "failed_frames.json"
+    kept = []  # results already saved by an earlier run (--retry-failed only)
+
+    if args.retry_failed:
+        if not fail_path.exists() or not out.exists():
+            sys.exit(f"--retry-failed needs both {fail_path.name} and {out.name} from an earlier run.")
+        frames = [{k: v for k, v in f.items() if k != "error"}
+                  for f in json.loads(fail_path.read_text())["frames"]]
+        kept = json.loads(out.read_text())["frames"]
+        print(f"Retrying {len(frames)} failed frames with {args.model}...")
+    else:
+        frames = json.loads(Path(args.manifest).read_text())["frames"]
+        print(f"Extracting content from {len(frames)} frames with {args.model}...")
 
     failed = []
 
@@ -160,18 +175,20 @@ def main():
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         results = [r for r in pool.map(work, frames) if r]
 
+    new_idx = {r["index"] for r in results}
+    results = [r for r in kept if r["index"] not in new_idx] + results
     results.sort(key=lambda r: r["timestamp"])
-    out = Path(args.manifest).parent / "frame_content.json"
     out.write_text(json.dumps({"model": args.model, "frames": results}, indent=2))
     print(f"\n{len(results)} frames had extractable content -> {out}")
 
     if failed:
         failed.sort(key=lambda r: r["timestamp"])
-        fail_path = out.parent / "failed_frames.json"
         fail_path.write_text(json.dumps({"frames": failed}, indent=2))
         print(f"WARNING: {len(failed)} frames FAILED and are missing from the notes -> {fail_path}\n"
-              f"Re-run with a lower --workers before building the notes.")
+              f"Run again with --retry-failed (and a lower --workers if you hit rate limits) "
+              f"before building the notes.")
         sys.exit(1)
+    fail_path.unlink(missing_ok=True)  # this script's own output; nothing left to retry
 
 
 if __name__ == "__main__":

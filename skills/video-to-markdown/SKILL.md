@@ -229,6 +229,13 @@ speaker's face, a title card, a decorative screen — returns `NONE` and is
 dropped. That escape hatch is what keeps the final document from filling up
 with "a man is standing at a podium."
 
+Calls are retried on rate limits and server errors. If any frame still fails
+(or comes back truncated or refused), the script lists it in
+`work/failed_frames.json` and exits non-zero. Run the same command again with
+`--retry-failed` (add a lower `--workers` for rate limits) to process only those
+frames and merge them into `frame_content.json`. Do not build notes until it
+exits cleanly, or the missing frames are silently absent.
+
 `--ocr` runs tesseract and passes the text alongside the image. It measurably
 helps on dense slides and small type, and costs nothing but time.
 
