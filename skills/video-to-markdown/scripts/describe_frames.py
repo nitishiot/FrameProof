@@ -8,9 +8,10 @@ what keeps the final document from filling up with "a person is speaking".
 
 Usage:
     export ANTHROPIC_API_KEY=sk-ant-...
-    python describe_frames.py work/frames.json [--model claude-sonnet-5] [--ocr]
+    python describe_frames.py work/frames.json [--model claude-sonnet-5-5] [--ocr]
 
-Writes work/frame_content.json.
+Writes work/frame_content.json. Frames that fail after retries (rate limits, truncated
+or refused replies) go to work/failed_frames.json and the script exits non-zero.
 """
 
 import argparse
@@ -20,12 +21,16 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 API_URL = "https://api.anthropic.com/v1/messages"
+MAX_TOKENS = 8000  # headroom for model thinking plus a dense table; 1500 truncated silently
+MAX_ATTEMPTS = 5
+RETRYABLE = {408, 409, 429, 500, 502, 503, 504, 529}
 
 PROMPT = """This is a frame from a screen recording, captured at {ts}.
 
@@ -67,7 +72,7 @@ def call_api(api_key, model, image_b64, timestamp, ocr_hint):
 
     payload = {
         "model": model,
-        "max_tokens": 1500,
+        "max_tokens": MAX_TOKENS,
         "messages": [{
             "role": "user",
             "content": [
@@ -86,9 +91,26 @@ def call_api(api_key, model, image_b64, timestamp, ocr_hint):
                  "x-api-key": api_key,
                  "anthropic-version": "2023-06-01"},
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read())
-    return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read())
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in RETRYABLE or attempt == MAX_ATTEMPTS - 1:
+                raise
+            delay = float(e.headers.get("retry-after") or 2 ** attempt)
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if attempt == MAX_ATTEMPTS - 1:
+                raise
+            delay = 2 ** attempt
+        time.sleep(min(delay, 60))
+
+    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
+    # A truncated, refused or empty reply must not be saved as if it were the frame's content.
+    if data.get("stop_reason") in ("max_tokens", "refusal") or not text:
+        raise ValueError(f"unusable reply (stop_reason={data.get('stop_reason')}, {len(text)} chars)")
+    return text
 
 
 def hhmmss(seconds):
@@ -99,7 +121,7 @@ def hhmmss(seconds):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("manifest", help="work/frames.json from extract_frames.py")
-    ap.add_argument("--model", default="claude-sonnet-5")
+    ap.add_argument("--model", default="claude-sonnet-5-5")
     ap.add_argument("--ocr", action="store_true",
                     help="run tesseract and pass the text alongside the image")
     ap.add_argument("--workers", type=int, default=4)
@@ -113,24 +135,27 @@ def main():
     frames = manifest["frames"]
     print(f"Extracting content from {len(frames)} frames with {args.model}...")
 
+    failed = []
+
     def work(frame):
         img_b64 = base64.b64encode(Path(frame["path"]).read_bytes()).decode()
         hint = ocr_text(frame["path"]) if args.ocr else ""
         try:
             content = call_api(api_key, args.model, img_b64, hhmmss(frame["timestamp"]), hint)
         except urllib.error.HTTPError as e:
-            body = e.read().decode()[:300]
-            print(f"  frame {frame['index']:>3}  API error {e.code}: {body}")
-            return None
+            reason = f"API error {e.code}: {e.read().decode()[:300]}"
         except Exception as e:
-            print(f"  frame {frame['index']:>3}  failed: {e}")
-            return None
+            reason = str(e)
+        else:
+            if content.upper().startswith("NONE"):
+                print(f"  frame {frame['index']:>3}  {hhmmss(frame['timestamp'])}  (skipped)")
+                return None
+            print(f"  frame {frame['index']:>3}  {hhmmss(frame['timestamp'])}  kept")
+            return {**frame, "content": content}
 
-        if content.strip().upper().startswith("NONE"):
-            print(f"  frame {frame['index']:>3}  {hhmmss(frame['timestamp'])}  (skipped)")
-            return None
-        print(f"  frame {frame['index']:>3}  {hhmmss(frame['timestamp'])}  kept")
-        return {**frame, "content": content}
+        print(f"  frame {frame['index']:>3}  FAILED: {reason}")
+        failed.append({**frame, "error": reason})
+        return None
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         results = [r for r in pool.map(work, frames) if r]
@@ -139,6 +164,14 @@ def main():
     out = Path(args.manifest).parent / "frame_content.json"
     out.write_text(json.dumps({"model": args.model, "frames": results}, indent=2))
     print(f"\n{len(results)} frames had extractable content -> {out}")
+
+    if failed:
+        failed.sort(key=lambda r: r["timestamp"])
+        fail_path = out.parent / "failed_frames.json"
+        fail_path.write_text(json.dumps({"frames": failed}, indent=2))
+        print(f"WARNING: {len(failed)} frames FAILED and are missing from the notes -> {fail_path}\n"
+              f"Re-run with a lower --workers before building the notes.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

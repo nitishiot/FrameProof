@@ -220,7 +220,7 @@ rather than paying for a vision pass over near-duplicates.
 ## Step 3 — Extract content from the frames
 
 ```bash
-python scripts/describe_frames.py work/frames.json --model claude-sonnet-5 --ocr
+python scripts/describe_frames.py work/frames.json --model claude-sonnet-5-5 --ocr
 ```
 
 The prompt asks for *extraction*, not description: charts come back as data
