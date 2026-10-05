@@ -8,6 +8,11 @@ this folder, naming [markitdown](https://github.com/microsoft/markitdown) and
 **Short answer: no, not as a replacement — but there is one narrow place where an external
 OCR engine could still earn its keep, and it is worth testing before Days 12–19.**
 
+> **Status, 2026-10-05.** The decision stands. The "before Days 12–19" window has passed: all
+> 19 recordings were delivered on the in-house pipeline, and the external-OCR test below was not
+> run. The in-house tesseract census has since re-read 8,492 grid cells across 8 recordings, so the
+> test remains optional, not pending. Everything below is the record as written on 2026-08-31.
+
 > ⚠ **Confidence note.** The assessments of markitdown and docling below are written from
 > general knowledge of what those projects do, **not** from reading their source — no code
 > was downloaded. The *architectural* claim (both are document converters, neither is a
