@@ -35,17 +35,17 @@ pipeline shaped like this:
 | Sample | 5 s grid over ~150 min → ~1,700 frames | rate is tuned to content: PDF page-flips needed a 1 s re-sample |
 | Mask | black out the title-bar clock, ticker strip, taskbar **before** hashing | without it, dedupe keys on a clock that changes every second |
 | Dedupe | masked 256-bit dHash, threshold 12 → 1,698 frames to **606** | the threshold curve is flat here; the screen genuinely changes every ~14 s |
-| Classify | which application is on screen, per frame | Day 11 has **four** surfaces: charts, Acrobat, MS Paint, windowed Market Watch |
+| Classify | which application is on screen, per frame | the sample lecture has **four** surfaces: charts, a PDF viewer, a drawing app, a windowed data panel |
 | Thin | keep the last frame of each contiguous run — the settled state | the instructor narrates while drawing; mid-drawing frames are noise |
 | Extract | read overlays as **tables**, not prose descriptions | entry/stop/target prices, dialog fields, replicated level names |
 | Merge | interleave with a timestamped transcript on one timeline | speech and screen frequently disagree, and both must survive |
-| Verify | V0–V6: arithmetic, geometry, OCR census, blind re-read | see `_vtm_work/day11/VERIFY-SPEC.md` |
+| Verify | V0–V6: arithmetic, geometry, OCR census, blind re-read | staged checks, each catching a different class of error |
 
 **The load-bearing fact:** the visual stream carries figures that appear nowhere in the
-audio. On Day 11 the instructor says *"I have made this stop loss a little bit wide"* and
-never speaks a number, while the screen shows Entry 88.55 and the stop walked
-86.25 → 86.35 → 86.45. A transcript-only output does not merely lose detail — it loses the
-lesson. This was established empirically and is recorded in `CLAUDE.md`.
+audio. In an illustrative case, the instructor says *"I have set this limit a little bit wide"* and
+never speaks a number, while the screen shows a base value of 120.40 and the limit walked
+117.10 → 117.30 → 117.50 (invented figures, not from any real lecture). A transcript-only
+output does not merely lose detail — it loses the lesson. This was established empirically.
 
 ## The candidates
 
@@ -105,8 +105,7 @@ three layers into building.
 **V3's unresolved cells.** The OCR census finished at 93.2 % cell agreement using tesseract
 5.4.0, and left **127 grid cells that no tesseract setting could read** — concentrated in the
 `Open` column, which renders white text on saturated red, and in long quantities. Those
-cells are currently unverified in either direction and are reported as such in
-`_vtm_work/day11/verify/v3-ocr.md`.
+cells are currently unverified in either direction and are reported as such in the V3 report.
 
 Neural OCR (EasyOCR, RapidOCR — both drivable by docling) fails *differently* from
 tesseract's LSTM on 11 px UI text. It might read some of that residue.
@@ -117,7 +116,7 @@ This is a bounded, cheap experiment:
   `pip install rapidocr-onnxruntime` needs no admin and no source download. Docling itself
   is not required to test the idea.
 - The V3 harness is already factored for it: **`hard_read()` in
-  `_vtm_work/v3_adjudicate.py` is the only function that would change.** The cropping,
+  the V3 adjudication script is the only function that would change.** The cropping,
   masking, upscaling, voting and diffing all stay.
 - Success criterion: does it cut the 127-cell residue materially? If it reads fewer than a
   few dozen of them, it is not worth the dependency.
@@ -130,9 +129,9 @@ eight more videos.
 1. **Keep the pipeline.** It solves a problem neither candidate addresses, it is already
    built and measured, and it carries a verification stack that has found real errors
    (three in V3 alone, one in V2).
-2. **Do not re-architect mid-verification.** Day 11 is delivered with V0–V3 passing; V4–V6
+2. **Do not re-architect mid-verification.** The sample lecture is delivered with V0–V3 passing; V4–V6
    are open. Swapping toolchains now would invalidate the accuracy statement in progress.
-3. **Revisit before Days 12–19**, and when you do, ask the narrow question — *"does a
+3. **Revisit before the remaining lectures**, and when you do, ask the narrow question — *"does a
    different OCR engine cut the unresolved-cell count?"* — not the broad one.
 
 ## What would change this decision
@@ -197,7 +196,7 @@ shopping — **the vocabulary that will actually find comparable tools**. Search
 
 | # | Capability | Here | Search vocabulary |
 |---|---|---|---|
-| B1 | **On-screen application classification** | measured pixel discriminators separate Acrobat / chart / Paint / grid at 1920x1080 | `GUI screenshot classification`, `screen understanding`, `UI element detection` |
+| B1 | **On-screen application classification** | measured pixel discriminators separate PDF viewer / chart / drawing app / grid at 1920x1080 | `GUI screenshot classification`, `screen understanding`, `UI element detection` |
 | B2 | **Temporal thinning to settled states** | keep the last frame of each contiguous run — the finished drawing, not the drawing in progress | `temporal redundancy removal`, `stable frame selection` |
 | B3 | Grid geometry detection from pixels | column separators from the header band, row phase from the blank separators, re-derived per frame | `table detection`, `line detection`, `document layout analysis` |
 | B4 | OCR tuned for small UI text | background-relative masking (white-on-green *and* black-on-grey), grayscale upscaling, multi-setting vote | `OCR small text`, `screenshot OCR`, `UI text recognition`, `tesseract psm` |
