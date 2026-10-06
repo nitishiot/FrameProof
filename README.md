@@ -21,7 +21,7 @@ recording.mp4
 | Path | What it is |
 |---|---|
 | [`skills/video-to-markdown/`](skills/video-to-markdown/) | Claude Code skill: [`SKILL.md`](skills/video-to-markdown/SKILL.md) plus three scripts |
-| [`docs/frameproof.html`](docs/frameproof.html) | Write-up of the approach |
+| [Wiki](https://github.com/nitishiot/FrameProof/wiki) | Write-up of the approach |
 | [`docs/TOOLING-COMPARISON.md`](docs/TOOLING-COMPARISON.md) | Why not markitdown or docling |
 
 ## Quick start
