@@ -5,8 +5,8 @@ Context for Claude Code working in this repo. Budget: **this file ≤ 10 KB**; n
 ## What this repo is
 
 **Public** open-source Claude Code skill (`skills/video-to-markdown/`, MIT) that turns a screen recording into
-markdown keeping both speech and on-screen content. Scope is the tool only: its scripts, `SKILL.md`, README and
-the tooling comparison.
+markdown keeping both speech and on-screen content. Scope is the tool only: its scripts, `SKILL.md`, README, the
+tooling comparison and the demo page (`docs/index.html`, one self-contained file for GitHub Pages).
 
 ⛔ Out of scope here, because anything committed is downloadable by anyone: write-ups, drafts, channel plans,
 handover notes, account details, n8n workflows. Those live in a separate private repo. The verification stack

@@ -21,6 +21,7 @@ recording.mp4
 | Path | What it is |
 |---|---|
 | [`skills/video-to-markdown/`](skills/video-to-markdown/) | Claude Code skill: [`SKILL.md`](skills/video-to-markdown/SKILL.md) plus three scripts |
+| [`docs/index.html`](docs/index.html) | Interactive 3D view of the pipeline ([live page](https://nitishiot.github.io/FrameProof/), once GitHub Pages serves `/docs`) |
 | [Wiki](https://github.com/nitishiot/FrameProof/wiki) | Write-up of the approach |
 | [`docs/TOOLING-COMPARISON.md`](docs/TOOLING-COMPARISON.md) | Why not markitdown or docling |
 
