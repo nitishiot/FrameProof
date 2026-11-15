@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive 3D view of the FrameProof video-to-markdown pipeline: pick a recording type and sampling interval and see what lands in notes.md.">
+<title>FrameProof Studio</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+html { color-scheme: light; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+/* Layout: an editing-suite split. The turntable stage holds the recording as two tracks
+   (screen frames above, speech waveform in front); the right-hand panel sets the pipeline;
+   the strip underneath shows what lands in notes.md and the commands that produce it. */
+:root {
+  --bg: #eef0f4;
+  --surface: #f9fafc;
+  --ink: #161a24;
+  --muted: #5b6274;
+  --line: #d3d7e0;
+  --screen: #3d4fd6;
+  --screen-soft: #e3e6fb;
+  --speech: #0f8a6a;
+  --speech-soft: #d9f0e8;
+  --warn: #a64b06;
+  --warn-soft: #fbe9d7;
+  --stage-a: #ffffff;
+  --stage-b: #dfe3ec;
+  --disc: #fbfbfd;
+  --rim: #1c2030;
+  --card: #ffffff;
+  --code-bg: #161a24;
+  --code-fg: #e6e9f2;
+  --code-dim: #8f98ad;
+  --font-display: "Bricolage Grotesque", "Arial Narrow", Arial, sans-serif;
+  --font-body: "Instrument Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1118; --surface: #161a24; --ink: #e9ecf4; --muted: #99a1b5; --line: #2a3040;
+    --screen: #8b98ff; --screen-soft: #1f2550; --speech: #4fd1a8; --speech-soft: #123a30;
+    --warn: #f0a35c; --warn-soft: #3a2614;
+    --stage-a: #232a3c; --stage-b: #10131b; --disc: #2a3145; --rim: #06080c; --card: #343c54;
+    --code-bg: #0a0c12; --code-fg: #e6e9f2; --code-dim: #7f889d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1118; --surface: #161a24; --ink: #e9ecf4; --muted: #99a1b5; --line: #2a3040;
+  --screen: #8b98ff; --screen-soft: #1f2550; --speech: #4fd1a8; --speech-soft: #123a30;
+  --warn: #f0a35c; --warn-soft: #3a2614;
+  --stage-a: #232a3c; --stage-b: #10131b; --disc: #2a3145; --rim: #06080c; --card: #343c54;
+  --code-bg: #0a0c12; --code-fg: #e6e9f2; --code-dim: #7f889d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.page { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--screen); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); }
+
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand b { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -0.01em; }
+.brand span { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.top a { font-size: 14px; font-weight: 500; text-underline-offset: 3px; }
+
+.intro { display: flex; flex-direction: column; gap: 10px; max-width: 46rem; }
+h1 {
+  font-family: var(--font-display); font-weight: 700; letter-spacing: -0.025em;
+  font-size: clamp(32px, 5.2vw, 56px); line-height: 1.02; margin: 0; text-wrap: balance;
+}
+h1 .s1 { color: var(--speech); }
+h1 .s2 { color: var(--screen); }
+.intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 38rem; }
+
+.studio {
+  display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+}
+.stage {
+  position: relative; min-width: 0; min-height: 440px;
+  background: radial-gradient(ellipse at 50% 38%, var(--stage-a), var(--stage-b) 78%);
+}
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: grab; }
+.stage canvas.dragging { cursor: grabbing; }
+.stage-tag, .stage-hint, .spin {
+  position: absolute; font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+}
+.stage-tag { top: 14px; left: 16px; right: 16px; color: var(--ink); }
+.stage-hint { bottom: 16px; left: 16px; }
+.spin {
+  bottom: 10px; right: 12px; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer;
+}
+.nogl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+
+.panel { border-left: 1px solid var(--line); padding: 22px; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+legend, .lab {
+  padding: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+legend { margin-bottom: 8px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.seg label { position: relative; min-width: 0; }
+.seg label + label { border-left: 1px solid var(--line); }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: block; padding: 9px 4px; text-align: center; font-size: 14px; font-weight: 500; }
+.seg input:checked + span { background: var(--ink); color: var(--bg); }
+.seg input:focus-visible + span { outline: 2px solid var(--screen); outline-offset: -3px; }
+.help { margin: 0; font-size: 13px; color: var(--muted); min-height: 2.9em; }
+
+.sw { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 15px; }
+.sw input { position: absolute; opacity: 0; }
+.sw i {
+  flex: none; width: 38px; height: 22px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s;
+}
+.sw i::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--surface); transition: transform .15s;
+}
+.sw input:checked + i::after { transform: translateX(16px); }
+.sw.speech input:checked + i { background: var(--speech); }
+.sw.screen input:checked + i, .sw.mask input:checked + i { background: var(--screen); }
+.sw input:focus-visible + i { outline: 2px solid var(--screen); outline-offset: 2px; }
+.sw small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.3; }
+
+.len { display: flex; align-items: baseline; justify-content: space-between; }
+.len output { font-family: var(--font-mono); font-size: 14px; }
+input[type="range"] { width: 100%; accent-color: var(--ink); margin: 0; }
+
+.total { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
+.total .big {
+  font-family: var(--font-display); font-weight: 700; font-size: 44px; line-height: 1; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.total .sub { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tip { margin: 6px 0 0; font-size: 13.5px; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }
+
+.out { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.out h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; margin: 0; }
+.out > div { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.out .cap { margin: 0; color: var(--muted); font-size: 14px; }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+.notes { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; font-size: 14.5px; }
+.notes .file { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.row { display: grid; grid-template-columns: 52px 54px minmax(0, 1fr); gap: 10px; align-items: start; }
+.row .ts { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding-top: 3px; }
+.row .who { font-family: var(--font-mono); font-size: 11px; padding: 2px 0; text-align: center; border-radius: 4px; margin-top: 1px; }
+.row.said .who { background: var(--speech-soft); color: var(--speech); }
+.row.shown .who { background: var(--screen-soft); color: var(--screen); }
+.row.lost .who { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
+.row.lost .body { color: var(--muted); text-decoration: line-through; }
+.row .body { min-width: 0; }
+.row .body p { margin: 0; }
+.row pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; background: var(--code-bg); color: var(--code-fg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; }
+.row .tw { overflow-x: auto; }
+.row table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.row th, .row td { text-align: left; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.row th { font-weight: 600; }
+.row .est { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.callout { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
+
+.cmd { background: var(--code-bg); border-radius: 12px; padding: 16px 18px; overflow-x: auto; }
+.cmd pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.75; color: var(--code-fg); white-space: pre; }
+.cmd .c { color: var(--code-dim); }
+.copy {
+  font: 500 13px var(--font-body); background: var(--ink); color: var(--bg); border: 0; border-radius: 999px;
+  padding: 7px 14px; cursor: pointer; flex: none;
+}
+.basis { margin: 0; font-size: 13px; color: var(--muted); max-width: 46rem; }
+.basis a { text-underline-offset: 3px; }
+
+@media (max-width: 860px) {
+  .studio { grid-template-columns: minmax(0, 1fr); }
+  .stage { min-height: 0; aspect-ratio: 1 / 1; max-width: 100%; }
+  .panel { border-left: 0; border-top: 1px solid var(--line); padding: 18px 16px; }
+  .out { grid-template-columns: minmax(0, 1fr); }
+  .help { min-height: 0; }
+}
+@media (max-width: 440px) {
+  .row { grid-template-columns: 44px minmax(0, 1fr); }
+  .row .who { grid-column: 2; justify-self: start; padding: 2px 8px; }
+  .row .body { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="brand"><b>FrameProof</b><span>video-to-markdown skill · MIT</span></div>
+    <a href="https://github.com/nitishiot/FrameProof">Source on GitHub</a>
+  </header>
+
+  <section class="intro">
+    <h1><span class="s1">What was said</span> and <span class="s2">what was on screen</span>, in one markdown file.</h1>
+    <p>A transcript-only converter drops the video track. FrameProof samples the screen, keeps only the distinct frames, reads them with a vision model and merges the result with the transcript by timestamp. Set up a recording below and watch what survives.</p>
+  </section>
+
+  <section class="studio" aria-label="Pipeline studio">
+    <div class="stage" id="stage">
+      <canvas id="gl" tabindex="0" role="img" aria-label="3D view of a two-minute slice of a recording: sampled frames on a timeline, distinct ones raised, with the speech waveform in front. Use left and right arrow keys to turn it."></canvas>
+      <div class="stage-tag" id="stageTag" aria-live="polite"></div>
+      <div class="stage-hint" id="stageHint">Drag to turn</div>
+      <button class="spin" id="spin" type="button">Pause rotation</button>
+      <div class="nogl" id="nogl" hidden>The 3D view needs WebGL, which this browser has turned off. The settings and output still work.</div>
+    </div>
+
+    <form class="panel" id="panel">
+      <fieldset>
+        <legend>Recording</legend>
+        <div class="seg">
+          <label><input type="radio" name="kind" id="kind-slides" value="slides" checked><span>Slide deck</span></label>
+          <label><input type="radio" name="kind" id="kind-app" value="app"><span>App screen</span></label>
+          <label><input type="radio" name="kind" id="kind-head" value="head"><span>Talking head</span></label>
+        </div>
+        <p class="help" id="kindHelp"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Sample one frame every</legend>
+        <div class="seg">
+          <label><input type="radio" name="interval" id="int-2" value="2"><span>2 s</span></label>
+          <label><input type="radio" name="interval" id="int-5" value="5" checked><span>5 s</span></label>
+          <label><input type="radio" name="interval" id="int-10" value="10"><span>10 s</span></label>
+          <label><input type="radio" name="interval" id="int-15" value="15"><span>15 s</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Streams</legend>
+        <label class="sw speech"><input type="checkbox" id="speech" checked><i></i><span>Speech<small>Whisper transcript, timestamped</small></span></label>
+        <label class="sw screen"><input type="checkbox" id="screen" checked><i></i><span>Screen<small>Distinct frames read by a vision model</small></span></label>
+        <label class="sw mask" id="maskRow" hidden><input type="checkbox" id="mask"><i></i><span>Mask clock and ticker<small>Blank volatile regions before hashing</small></span></label>
+      </fieldset>
+
+      <div>
+        <div class="len"><label class="lab" for="minutes">Recording length</label><output id="minOut" for="minutes"></output></div>
+        <input type="range" id="minutes" min="5" max="180" step="5" value="40">
+      </div>
+
+      <div class="total" aria-live="polite">
+        <span class="lab">Vision calls, whole recording</span>
+        <span class="big" id="big"></span>
+        <span class="sub" id="sub"></span>
+        <p class="tip" id="tip" hidden></p>
+      </div>
+    </form>
+  </section>
+
+  <section class="out">
+    <div>
+      <h2>What lands in notes.md</h2>
+      <p class="cap">Example output for the two-minute slice on the turntable. The talk and its numbers are made up.</p>
+      <div class="notes" id="notes"></div>
+    </div>
+    <div>
+      <div class="head"><h2>Commands for this setup</h2><button class="copy" id="copy" type="button">Copy</button></div>
+      <p class="cap">Run from <span class="mono">skills/video-to-markdown</span>. Needs ffmpeg, Python 3 and an Anthropic API key.</p>
+      <div class="cmd"><pre id="cmd"></pre></div>
+    </div>
+  </section>
+
+  <p class="basis">The call counts are a rough guide built from the figures in <a href="https://github.com/nitishiot/FrameProof/blob/main/skills/video-to-markdown/SKILL.md">SKILL.md</a>: a typical 40-minute talk keeps 20 to 40 distinct frames, and one 10-minute terminal recording kept 44 frames unmasked while showing only 4 distinct screens. The vision pass runs once per kept frame, so that count is where nearly all the cost sits.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var SLICE = 120; // seconds shown on the turntable
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var state = { kind: 'slides', interval: 5, speech: true, screen: true, mask: false, minutes: 40, spin: !reduced };
+
+  var KIND = {
+    slides: { label: 'slide deck', help: 'Slides and charts held on screen while someone talks. The case the skill is built for.',
+              cuts: [0, 48, 95], tex: ['chart', 'code', 'table'] },
+    app:    { label: 'app recording', help: 'An IDE, terminal or dashboard. A clock or ticker changes every second and fools the duplicate check.',
+              cuts: [0, 70], tex: ['app', 'dialog'] },
+    head:   { label: 'talking head', help: 'A face and a voice. Nothing on screen to extract, so the visual steps are skipped.',
+              cuts: [0], tex: ['head'] }
+  };
+
+  /* ---------- model ---------- */
+  function sampleTimes() { var a = []; for (var t = 0; t < SLICE; t += state.interval) a.push(t); return a; }
+  function segOf(t, cuts) { var s = 0; for (var i = 0; i < cuts.length; i++) if (t >= cuts[i]) s = i; return s; }
+  function noise(t) { var x = Math.sin(t * 12.9898 + 4.1) * 43758.5453; return x - Math.floor(x); }
+  function keptFlags(times) {
+    var cuts = KIND[state.kind].cuts, prev = -1;
+    return times.map(function (t) {
+      var s = segOf(t, cuts), first = s !== prev; prev = s;
+      if (!state.screen) return false;
+      if (first) return true;
+      return state.kind === 'app' && !state.mask && noise(t) < 0.37;
+    });
+  }
+  function estimate() {
+    var samples = Math.round(state.minutes * 60 / state.interval);
+    if (!state.screen || state.kind === 'head') return { samples: 0, lo: 0, hi: 0 };
+    if (state.kind === 'slides') return { samples: samples, lo: Math.min(samples, Math.round(state.minutes * 0.5)), hi: Math.min(samples, state.minutes) };
+    var n = state.mask ? Math.max(1, Math.round(state.minutes * 0.4)) : Math.round(samples * 0.37);
+    n = Math.min(samples, n);
+    return { samples: samples, lo: n, hi: n };
+  }
+  function fmt(n) { return n.toLocaleString('en-US'); }
+
+  /* ---------- panel + readouts ---------- */
+  function renderPanel() {
+    $('kindHelp').textContent = KIND[state.kind].help;
+    $('maskRow').hidden = state.kind !== 'app';
+    $('minOut').textContent = state.minutes + ' min';
+    var e = estimate(), big, sub;
+    if (!state.screen) { big = '0'; sub = 'Screen stream is off. Nothing is sampled.'; }
+    else if (state.kind === 'head') { big = '0'; sub = 'Frame extraction skipped. Notes come from the transcript.'; }
+    else {
+      big = (e.lo === e.hi ? '≈ ' + fmt(e.lo) : fmt(e.lo) + '–' + fmt(e.hi));
+      sub = fmt(e.samples) + ' frames sampled, ' + (e.lo === e.hi ? 'about ' + fmt(e.lo) : fmt(e.lo) + ' to ' + fmt(e.hi)) + ' kept as distinct.';
+    }
+    $('big').textContent = big; $('sub').textContent = sub;
+
+    var tip = '';
+    if (!state.screen && !state.speech) tip = 'Both streams are off, so there is nothing to convert. Turn one back on.';
+    else if (!state.screen && state.kind !== 'head') tip = 'This is what a transcript-only converter gives you. Every chart, table and code block is gone.';
+    else if (state.kind === 'app' && !state.mask) tip = 'The clock and ticker fire the duplicate check on unchanged screens. Mask them before hashing.';
+    else if (state.minutes > 90) tip = 'Over about 90 minutes, tune the settings on a 10-minute slice first.';
+    else if (!state.speech) tip = 'Silent capture: skip Whisper and pass no transcript to build_notes.py.';
+    else if (state.kind !== 'head' && state.interval <= 2) tip = 'A short interval catches slides that are only up for a few seconds, at the cost of more sampling.';
+    else if (state.kind !== 'head' && state.interval >= 10) tip = 'A long interval is cheaper on long recordings but can miss a slide that is only up briefly.';
+    $('tip').hidden = !tip; $('tip').textContent = tip;
+  }
+
+  /* ---------- notes.md preview ---------- */
+  function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+  function row(kind, ts, who, body) {
+    var r = el('div', 'row ' + kind); r.appendChild(el('span', 'ts', ts)); r.appendChild(el('span', 'who', who));
+    var b = el('div', 'body'); if (typeof body === 'string') b.appendChild(el('p', null, body)); else b.appendChild(body);
+    r.appendChild(b); return r;
+  }
+  function table(head, rows) {
+    var w = el('div', 'tw'), t = el('table'), tr = el('tr');
+    head.forEach(function (h) { tr.appendChild(el('th', null, h)); }); t.appendChild(tr);
+    rows.forEach(function (r) { var x = el('tr'); r.forEach(function (c) { x.appendChild(el('td', null, c)); }); t.appendChild(x); });
+    w.appendChild(t); return w;
+  }
+  function renderNotes() {
+    var box = $('notes'); box.textContent = '';
+    box.appendChild(el('div', 'file', 'notes.md · 00:00 to 02:00'));
+    var hasScreen = state.screen && state.kind !== 'head';
+    if (!state.speech && !state.screen) { box.appendChild(el('div', 'callout', 'Nothing to write. Both streams are off.')); return; }
+    if (!state.speech) box.appendChild(el('div', 'callout', 'Partial output: no transcript. This document holds on-screen content only.'));
+    if (!state.screen && state.kind !== 'head') box.appendChild(el('div', 'callout', 'Partial output: the video track was not processed. Anything shown but not said is missing.'));
+
+    var chart = document.createElement('div');
+    chart.appendChild(table(['Build', 'Seconds'], [['Cold', '212'], ['Cached', '38']]));
+    chart.appendChild(el('div', 'est', '> Values estimated from the chart; verify.'));
+    var parts = [
+      { ts: '00:00', said: 'Cold builds had crept past three minutes. Here is where the time goes, and what the cache gives back.',
+        shown: chart, lost: 'Bar chart of build times' },
+      { ts: '00:48', said: 'The whole fix is two lines of config. The key changes only when the lockfile does.',
+        shown: el('pre', null, 'cache:\n  key: deps-{{ checksum "package-lock.json" }}\n  paths: [node_modules]'), lost: 'Config file shown in the editor' },
+      { ts: '01:35', said: 'And the saving holds on all three services, not just the one we tuned.',
+        shown: table(['Service', 'Before', 'After'], [['api', '212 s', '38 s'], ['web', '164 s', '41 s'], ['worker', '97 s', '29 s']]), lost: 'Results table for three services' }
+    ];
+    parts.forEach(function (p) {
+      if (state.speech) box.appendChild(row('said', p.ts, 'said', p.said));
+      if (hasScreen) box.appendChild(row('shown', p.ts, 'shown', p.shown));
+      else if (state.kind !== 'head') box.appendChild(row('lost', p.ts, 'lost', p.lost));
+    });
+    if (state.kind === 'head' && state.speech) box.appendChild(el('div', 'file', 'No on-screen content in this recording, so the transcript is the whole document.'));
+  }
+
+  /* ---------- commands ---------- */
+  function commandLines() {
+    var L = [], vis = state.screen && state.kind !== 'head';
+    if (!state.speech && !vis) return [['c', '# nothing to run with both streams off']];
+    if (state.minutes > 90) { L.push(['c', '# long recording: tune on a 10-minute slice first']); L.push(['', 'ffmpeg -ss 0 -t 600 -i recording.mp4 -c copy slice.mp4']); }
+    if (state.speech) L.push(['', 'whisper recording.mp4 --model medium --output_format vtt --output_dir work/']);
+    if (vis) {
+      if (state.kind === 'app' && state.mask) L.push(['c', '# mask the clock, taskbar and ticker before hashing: SKILL.md, "Screen recordings"']);
+      L.push(['', 'python scripts/extract_frames.py recording.mp4 --out work/ --interval ' + state.interval]);
+      L.push(['', 'python scripts/describe_frames.py work/frames.json --ocr']);
+      L.push(['', 'python scripts/build_notes.py work/frame_content.json' + (state.speech ? ' work/recording.vtt' : '') + ' --out work/notes-raw.md --embed-images']);
+      L.push(['c', '# then the synthesis pass turns notes-raw.md into notes.md']);
+    } else {
+      L.push(['c', '# no frames to read: write notes.md straight from work/recording.vtt']);
+    }
+    return L;
+  }
+  function renderCmd() {
+    var pre = $('cmd'); pre.textContent = '';
+    commandLines().forEach(function (l, i) { if (i) pre.appendChild(document.createTextNode('\n')); pre.appendChild(el('span', l[0] || null, l[1])); });
+  }
+  $('copy').addEventListener('click', function () {
+    var text = commandLines().map(function (l) { return l[1]; }).join('\n'), btn = $('copy');
+    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents($('cmd')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Selected'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  /* ---------- 3D scene ---------- */
+  var T = window.THREE, gl = null, scene, camera, tableG, cardsG, cards = [], wave, waveCur = [], waveTgt = [], C = {}, textures = {}, polar = 1.12, dragging = false;
+  var WAVE_N = 150, X0 = -3.5, XW = 7.0, CARD_Z = -0.45, WAVE_Z = 1.55;
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function readColors() {
+    ['ink', 'muted', 'line', 'screen', 'speech', 'disc', 'rim', 'card', 'screen-soft'].forEach(function (k) { C[k] = css('--' + k); });
+  }
+  function canvasTex(w, h, draw) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+    var t = new T.CanvasTexture(c); t.anisotropy = 4; return t;
+  }
+  function screenTex(type) {
+    return canvasTex(320, 180, function (g, w, h) {
+      g.fillStyle = C.card; g.fillRect(0, 0, w, h);
+      g.strokeStyle = C.line; g.lineWidth = 4; g.strokeRect(2, 2, w - 4, h - 4);
+      var bar = function (x, y, bw, bh, col) { g.fillStyle = col; g.fillRect(x, y, bw, bh); };
+      if (type === 'chart') {
+        bar(24, 20, 130, 10, C.ink);
+        [70, 104, 52, 122, 88].forEach(function (v, i) { bar(34 + i * 54, 158 - v, 34, v, i === 3 ? C.screen : C.muted); });
+        bar(24, 158, 272, 3, C.ink);
+      } else if (type === 'code') {
+        bar(14, 14, 292, 152, C.rim);
+        [[0, 90], [1, 150], [1, 110], [2, 130], [1, 60], [0, 40]].forEach(function (r, i) { bar(30 + r[0] * 22, 32 + i * 21, r[1], 8, i === 1 ? C.screen : '#aab2c8'); });
+      } else if (type === 'table') {
+        bar(24, 20, 100, 10, C.ink);
+        for (var r = 0; r < 4; r++) for (var c2 = 0; c2 < 3; c2++) bar(24 + c2 * 94, 50 + r * 28, c2 === 0 ? 70 : 54, 9, r === 0 ? C.screen : C.muted);
+        for (var k = 0; k < 4; k++) bar(24, 68 + k * 28, 272, 2, C.line);
+      } else if (type === 'app' || type === 'dialog') {
+        bar(4, 4, 312, 18, C.rim); bar(264, 9, 42, 8, C.speech);
+        bar(4, 22, 70, 154, C['screen-soft']);
+        for (var i = 0; i < 6; i++) { bar(14, 36 + i * 20, 46, 6, C.muted); bar(90, 36 + i * 20, 120 + (i * 37) % 80, 6, C.muted); }
+        if (type === 'dialog') { bar(100, 52, 170, 90, C.card); g.strokeStyle = C.screen; g.lineWidth = 5; g.strokeRect(100, 52, 170, 90); bar(116, 70, 110, 8, C.ink); bar(116, 90, 138, 6, C.muted); bar(206, 116, 50, 14, C.screen); }
+      } else {
+        g.fillStyle = C.muted; g.beginPath(); g.arc(160, 74, 34, 0, 7); g.fill();
+        g.beginPath(); g.ellipse(160, 176, 74, 54, 0, 0, 7); g.fill();
+      }
+    });
+  }
+  function labelSprite(text, color, w) {
+    var tex = canvasTex(256, 64, function (g) {
+      g.font = '500 30px "IBM Plex Mono", ui-monospace, Menlo, monospace'; g.fillStyle = color; g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText(text, 128, 34);
+    });
+    var s = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); s.scale.set(w, w / 4, 1); return s;
+  }
+  function disposeGroup(g) {
+    g.traverse(function (o) {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+    });
+  }
+  function clock(t) { var m = Math.floor(t / 60), s = t % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+
+  function buildScene() {
+    if (!gl) return;
+    readColors();
+    var rot = tableG ? tableG.rotation.y : -0.42;
+    if (tableG) { scene.remove(tableG); disposeGroup(tableG); }
+    tableG = new T.Group(); tableG.rotation.y = rot; scene.add(tableG);
+    Object.keys(KIND).forEach(function (k) { KIND[k].tex.forEach(function (n) { textures[n] = screenTex(n); }); });
+
+    var disc = new T.Mesh(new T.CylinderGeometry(5.2, 5.2, 0.2, 96), new T.MeshStandardMaterial({ color: C.disc, roughness: 0.95 }));
+    disc.position.y = -0.1; tableG.add(disc);
+    var rim = new T.Mesh(new T.CylinderGeometry(5.5, 5.5, 0.16, 96), new T.MeshStandardMaterial({ color: C.rim, roughness: 0.7 }));
+    rim.position.y = -0.27; tableG.add(rim);
+    var ticks = new T.InstancedMesh(new T.BoxGeometry(0.02, 0.01, 0.16), new T.MeshBasicMaterial({ color: C.line }), 60), d = new T.Object3D();
+    for (var i = 0; i < 60; i++) { var a = i / 60 * Math.PI * 2; d.position.set(Math.sin(a) * 4.9, 0.006, Math.cos(a) * 4.9); d.rotation.set(0, a, 0); d.updateMatrix(); ticks.setMatrixAt(i, d.matrix); }
+    tableG.add(ticks);
+
+    var railMat = new T.MeshBasicMaterial({ color: C.muted });
+    var rail = new T.Mesh(new T.BoxGeometry(XW + 0.3, 0.03, 0.05), railMat); rail.position.set(0, 0.02, CARD_Z); tableG.add(rail);
+    var rail2 = new T.Mesh(new T.BoxGeometry(XW + 0.3, 0.02, 0.02), railMat); rail2.position.set(0, 0.012, WAVE_Z); tableG.add(rail2);
+    for (var s = 0; s <= SLICE; s += 30) {
+      var x = X0 + s / SLICE * XW;
+      var tk = new T.Mesh(new T.BoxGeometry(0.02, 0.01, 0.3), railMat); tk.position.set(x, 0.006, 0.55); tableG.add(tk);
+      var lb = labelSprite(clock(s), C.muted, 1.4); lb.position.set(x, 0.3, 0.62); tableG.add(lb);
+    }
+    var l1 = labelSprite('screen', C.screen, 1.5); l1.position.set(X0 - 0.8, 0.35, CARD_Z); tableG.add(l1);
+    var l2 = labelSprite('speech', C.speech, 1.5); l2.position.set(X0 - 0.8, 0.35, WAVE_Z); tableG.add(l2);
+
+    wave = new T.InstancedMesh(new T.BoxGeometry(0.026, 1, 0.026), new T.MeshBasicMaterial({ color: C.speech, transparent: true }), WAVE_N);
+    tableG.add(wave);
+    for (var w = 0; w < WAVE_N; w++) if (waveCur[w] == null) waveCur[w] = 0.03;
+    buildCards();
+  }
+
+  function buildCards() {
+    if (!gl) return;
+    if (cardsG) { tableG.remove(cardsG); cardsG.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+    cardsG = new T.Group(); tableG.add(cardsG); cards = [];
+    var times = sampleTimes(), K = KIND[state.kind];
+    var plane = new T.PlaneGeometry(1.6, 0.9), edges = new T.EdgesGeometry(plane), stemGeo = new T.BoxGeometry(0.014, 1, 0.014);
+    times.forEach(function (t) {
+      var g = new T.Group(); g.position.set(X0 + t / SLICE * XW, 0, CARD_Z);
+      var face = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[K.tex[segOf(t, K.cuts)]], transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false }));
+      var line = new T.LineSegments(edges, new T.LineBasicMaterial({ color: C.screen, transparent: true, opacity: 0 }));
+      face.add(line); face.rotation.y = 0.9; face.position.y = 0.55;
+      var stem = new T.Mesh(stemGeo, new T.MeshBasicMaterial({ color: C.screen, transparent: true, opacity: 0 }));
+      g.add(face); g.add(stem); cardsG.add(g);
+      cards.push({ face: face, line: line, stem: stem, y: 0.55, o: 0, k: 0, ty: 0.55, to: 0.14, tk: 0 });
+    });
+    applyTargets();
+  }
+
+  function applyTargets() {
+    var times = sampleTimes(), flags = keptFlags(times), kept = 0;
+    flags.forEach(function (f, i) {
+      if (f) kept++;
+      var c = cards[i]; if (!c) return;
+      c.ty = f ? 1.75 : 0.55; c.to = f ? 1 : (state.screen ? 0.16 : 0.07); c.tk = f ? 1 : 0;
+      c.face.material.depthWrite = f; c.face.renderOrder = f ? 2 : 1;
+    });
+    for (var i = 0; i < WAVE_N; i++) {
+      var env = Math.abs(Math.sin(i * 0.91) * Math.sin(i * 0.23 + 1)), gate = Math.sin(i * 0.085 + 0.6) > -0.55 ? 1 : 0.06;
+      waveTgt[i] = state.speech ? 0.08 + 1.3 * env * gate : 0.03;
+    }
+    if (wave) wave.material.opacity = state.speech ? 1 : 0.3;
+    var tag = clock(SLICE) + ' slice · ' + times.length + ' frames sampled · ';
+    if (!state.screen) tag += 'screen off';
+    else if (state.kind === 'head') tag += '1 distinct, no content';
+    else tag += kept + ' kept';
+    $('stageTag').textContent = tag;
+  }
+
+  var dummy = null, last = 0;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    var dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
+    var k = reduced ? 1 : 1 - Math.exp(-dt * 7);
+    if (state.spin && !dragging) tableG.rotation.y += dt * 0.22;
+    cards.forEach(function (c) {
+      c.y += (c.ty - c.y) * k; c.o += (c.to - c.o) * k; c.k += (c.tk - c.k) * k;
+      c.face.position.y = c.y; c.face.material.opacity = c.o; c.line.material.opacity = c.k;
+      var h = Math.max(0.01, c.y - 0.45); c.stem.scale.y = h; c.stem.position.y = h / 2; c.stem.material.opacity = c.k;
+    });
+    for (var i = 0; i < WAVE_N; i++) {
+      waveCur[i] += (waveTgt[i] - waveCur[i]) * k;
+      dummy.position.set(X0 + i / (WAVE_N - 1) * XW, waveCur[i] / 2 + 0.02, WAVE_Z); dummy.scale.set(1, waveCur[i], 1); dummy.updateMatrix(); wave.setMatrixAt(i, dummy.matrix);
+    }
+    wave.instanceMatrix.needsUpdate = true;
+    gl.render(scene, camera);
+  }
+  function placeCamera() {
+    var st = $('stage'), w = st.clientWidth, h = st.clientHeight; if (!w || !h) return;
+    gl.setSize(w, h, false); camera.aspect = w / h;
+    var half = Math.tan(T.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+    var R = Math.max(12, 5.7 / half);
+    camera.position.set(0, R * Math.cos(polar) + 0.2, R * Math.sin(polar)); camera.lookAt(0, 0.2, 0); camera.updateProjectionMatrix();
+  }
+  function initScene() {
+    if (!T) throw new Error('three.js did not load');
+    var canvas = $('gl');
+    gl = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    scene = new T.Scene(); camera = new T.PerspectiveCamera(32, 1, 0.1, 100); dummy = new T.Object3D();
+    scene.add(new T.HemisphereLight(0xffffff, 0x8088a0, 0.95));
+    var sun = new T.DirectionalLight(0xffffff, 0.45); sun.position.set(4, 10, 6); scene.add(sun);
+    buildScene(); placeCamera();
+    new ResizeObserver(placeCamera).observe($('stage'));
+
+    var px = 0, py = 0;
+    canvas.addEventListener('pointerdown', function (e) { dragging = true; px = e.clientX; py = e.clientY; canvas.classList.add('dragging'); try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
+    canvas.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      tableG.rotation.y += (e.clientX - px) * 0.008;
+      if (e.pointerType === 'mouse') { polar = Math.min(1.42, Math.max(0.55, polar - (e.clientY - py) * 0.005)); placeCamera(); }
+      px = e.clientX; py = e.clientY;
+    });
+    var end = function () { dragging = false; canvas.classList.remove('dragging'); };
+    canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+    canvas.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { tableG.rotation.y -= 0.15; e.preventDefault(); }
+      if (e.key === 'ArrowRight') { tableG.rotation.y += 0.15; e.preventDefault(); }
+    });
+    var retheme = function () { buildScene(); };
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+    new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(retheme);
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- wiring ---------- */
+  function setSpinLabel() { $('spin').textContent = state.spin ? 'Pause rotation' : 'Resume rotation'; }
+  $('spin').addEventListener('click', function () { state.spin = !state.spin; setSpinLabel(); });
+  function refresh(rebuild) {
+    renderPanel(); renderNotes(); renderCmd();
+    if (gl) { if (rebuild) buildCards(); else applyTargets(); }
+  }
+  $('panel').addEventListener('submit', function (e) { e.preventDefault(); });
+  $('panel').addEventListener('input', function (e) {
+    var t = e.target, rebuild = false;
+    if (t.name === 'kind') { state.kind = t.value; rebuild = true; }
+    else if (t.name === 'interval') { state.interval = +t.value; rebuild = true; }
+    else if (t.id === 'speech') state.speech = t.checked;
+    else if (t.id === 'screen') state.screen = t.checked;
+    else if (t.id === 'mask') state.mask = t.checked;
+    else if (t.id === 'minutes') state.minutes = +t.value;
+    refresh(rebuild);
+  });
+  // pick up form values the browser or a republish restored
+  var k0 = document.querySelector('input[name="kind"]:checked'), i0 = document.querySelector('input[name="interval"]:checked');
+  if (k0) state.kind = k0.value; if (i0) state.interval = +i0.value;
+  state.speech = $('speech').checked; state.screen = $('screen').checked; state.mask = $('mask').checked; state.minutes = +$('minutes').value;
+
+  setSpinLabel();
+  try { initScene(); }
+  catch (err) { gl = null; $('gl').hidden = true; $('spin').hidden = true; $('stageHint').hidden = true; $('nogl').hidden = false; }
+  refresh(false);
+})();
+</script>
+</body>
+</html>
