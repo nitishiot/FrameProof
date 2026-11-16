@@ -3,234 +3,416 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Interactive 3D view of the FrameProof video-to-markdown pipeline: pick a recording type and sampling interval and see what lands in notes.md.">
-<title>FrameProof Studio</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<meta name="description" content="FrameProof turns a screen recording into markdown that keeps what was said and what was on screen. This page runs the tool's own duplicate-frame check in your browser, on an example recording or on one of yours.">
+<title>FrameProof</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='7.5' y='3' width='14' height='10' rx='1.5' fill='none' stroke='%237d8794' stroke-width='1.6'/%3E%3Crect x='5' y='6.5' width='14' height='10' rx='1.5' fill='%23eef0f2' stroke='%237d8794' stroke-width='1.6'/%3E%3Crect x='2.5' y='10' width='14' height='10' rx='1.5' fill='%233fd0e6' stroke='%2312151a' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
 html { color-scheme: light; }
 body { margin: 0; }
 [hidden] { display: none !important; }
-/* Layout: an editing-suite split. The turntable stage holds the recording as two tracks
-   (screen frames above, speech waveform in front); the right-hand panel sets the pipeline;
-   the strip underneath shows what lands in notes.md and the commands that produce it. */
+/* Layout: a video bench. The dark stage is the recording taken apart: every sampled frame is a card on a time axis,
+   duplicates pile up behind the frame that was kept, and the speech runs along the same axis. Controls sit beside
+   the stage. The frame inspector, the resulting file and the commands follow in reading order.
+   Colour comes from the video world: subtitle yellow for what was said, cyan for what was on screen, red for what is lost. */
 :root {
-  --bg: #eef0f4;
-  --surface: #f9fafc;
-  --ink: #161a24;
-  --muted: #5b6274;
-  --line: #d3d7e0;
-  --screen: #3d4fd6;
-  --screen-soft: #e3e6fb;
-  --speech: #0f8a6a;
-  --speech-soft: #d9f0e8;
-  --warn: #a64b06;
-  --warn-soft: #fbe9d7;
-  --stage-a: #ffffff;
-  --stage-b: #dfe3ec;
-  --disc: #fbfbfd;
-  --rim: #1c2030;
-  --card: #ffffff;
-  --code-bg: #161a24;
-  --code-fg: #e6e9f2;
-  --code-dim: #8f98ad;
-  --font-display: "Bricolage Grotesque", "Arial Narrow", Arial, sans-serif;
-  --font-body: "Instrument Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --paper: #eef0f2;
+  --surface: #ffffff;
+  --sunk: #e2e5e9;
+  --ink: #12151a;
+  --muted: #56606e;
+  --line: #cbd1d8;
+  --said: #735400;
+  --said-soft: #fbeebb;
+  --shown: #0a667a;
+  --shown-soft: #d2eef4;
+  --lost: #b12c0d;
+  --lost-soft: #fbe0d8;
+  --stage: #0b0d11;
+  --stage-hi: #1b212a;
+  --stage-ink: #eef1f4;
+  --stage-muted: #9aa4b1;
+  --stage-line: #2c323c;
+  --cap: #f6c51b;
+  --kept: #3fd0e6;
+  --code-bg: #12151a;
+  --code-fg: #e8ebef;
+  --code-dim: #8e98a7;
+  --font-display: "Archivo", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1118; --surface: #161a24; --ink: #e9ecf4; --muted: #99a1b5; --line: #2a3040;
-    --screen: #8b98ff; --screen-soft: #1f2550; --speech: #4fd1a8; --speech-soft: #123a30;
-    --warn: #f0a35c; --warn-soft: #3a2614;
-    --stage-a: #232a3c; --stage-b: #10131b; --disc: #2a3145; --rim: #06080c; --card: #343c54;
-    --code-bg: #0a0c12; --code-fg: #e6e9f2; --code-dim: #7f889d;
+    --paper: #090b0e; --surface: #12151a; --sunk: #1a1e25; --ink: #eceff2; --muted: #9aa4b1; --line: #272d36;
+    --said: #f6c51b; --said-soft: #372c06; --shown: #5ad6ea; --shown-soft: #0b3340; --lost: #ff8466; --lost-soft: #3f1a11;
+    --code-bg: #05070a; --code-fg: #e8ebef; --code-dim: #8e98a7;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0e1118; --surface: #161a24; --ink: #e9ecf4; --muted: #99a1b5; --line: #2a3040;
-  --screen: #8b98ff; --screen-soft: #1f2550; --speech: #4fd1a8; --speech-soft: #123a30;
-  --warn: #f0a35c; --warn-soft: #3a2614;
-  --stage-a: #232a3c; --stage-b: #10131b; --disc: #2a3145; --rim: #06080c; --card: #343c54;
-  --code-bg: #0a0c12; --code-fg: #e6e9f2; --code-dim: #7f889d;
+  --paper: #090b0e; --surface: #12151a; --sunk: #1a1e25; --ink: #eceff2; --muted: #9aa4b1; --line: #272d36;
+  --said: #f6c51b; --said-soft: #372c06; --shown: #5ad6ea; --shown-soft: #0b3340; --lost: #ff8466; --lost-soft: #3f1a11;
+  --code-bg: #05070a; --code-fg: #e8ebef; --code-dim: #8e98a7;
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 body {
-  background: var(--bg); color: var(--ink);
-  font-family: var(--font-body); font-size: 16px; line-height: 1.5;
-  padding-block: 20px 48px;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+  padding-block: 16px 56px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-.page { max-width: 1160px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
-a { color: inherit; }
-:focus-visible { outline: 2px solid var(--screen); outline-offset: 2px; }
-.mono { font-family: var(--font-mono); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--paper); }
+.page { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--shown); outline-offset: 2px; }
+.mono, code { font-family: var(--font-mono); }
+code { font-size: 0.9em; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+h1, h2, h3, p, figure, ul, dl, dd { margin: 0; }
+h2 { font-family: var(--font-display); font-stretch: 110%; font-weight: 750; font-size: clamp(24px, 3.1vw, 34px); line-height: 1.1; letter-spacing: -0.02em; text-wrap: balance; }
+h3 { font: 600 12px/1.3 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cap { color: var(--muted); font-size: 15px; max-width: 44rem; }
+.sec { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 12px; }
+.sec-head { display: flex; align-items: end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
 
-.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.brand b { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -0.01em; }
-.brand span { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-.top a { font-size: 14px; font-weight: 500; text-underline-offset: 3px; }
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px;
+  font: 600 15px var(--font-body); color: var(--ink); background: transparent; border: 1.5px solid var(--ink); border-radius: 999px;
+  text-decoration: none; cursor: pointer;
+}
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn.small { min-height: 36px; padding: 0 14px; font-size: 13.5px; border-width: 1px; border-color: var(--line); }
+.btn[disabled] { opacity: .45; cursor: default; }
 
-.intro { display: flex; flex-direction: column; gap: 10px; max-width: 46rem; }
+/* top bar */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px 18px; flex-wrap: wrap; }
+.brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; }
+.brand b { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: 19px; letter-spacing: -0.015em; }
+.brand svg { color: var(--ink); }
+.top .tag { font: 12px var(--font-mono); color: var(--muted); margin-right: auto; }
+.top nav { display: flex; gap: 4px 18px; flex-wrap: wrap; }
+.top nav a { font-size: 14.5px; font-weight: 500; min-height: 32px; display: inline-flex; align-items: center; }
+
+/* hero */
+.hero { display: grid; gap: 18px; margin-bottom: -28px; }
+.eyebrow { font: 500 12.5px var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
 h1 {
-  font-family: var(--font-display); font-weight: 700; letter-spacing: -0.025em;
-  font-size: clamp(32px, 5.2vw, 56px); line-height: 1.02; margin: 0; text-wrap: balance;
+  font-family: var(--font-display); font-stretch: 114%; font-weight: 800;
+  font-size: clamp(36px, 7.3vw, 88px); line-height: 0.98; letter-spacing: -0.04em;
+  padding-left: 0.44em; text-indent: -0.44em; padding-bottom: 0.14em;
 }
-h1 .s1 { color: var(--speech); }
-h1 .s2 { color: var(--screen); }
-.intro p { margin: 0; color: var(--muted); font-size: 17px; max-width: 38rem; }
+.ref {
+  text-decoration-line: underline; text-decoration-style: wavy; text-decoration-color: var(--lost);
+  -webkit-text-decoration-line: underline; -webkit-text-decoration-style: wavy; -webkit-text-decoration-color: var(--lost);
+  text-decoration-thickness: 0.075em; text-underline-offset: 0.14em; text-decoration-skip-ink: none;
+}
+.hero-row { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px 56px; align-items: start; }
+.lede { font-size: clamp(17px, 1.55vw, 20px); line-height: 1.5; max-width: 40rem; }
+.hero-side { display: flex; flex-direction: column; gap: 16px; color: var(--muted); font-size: 15px; max-width: 30rem; }
+.cta { display: flex; gap: 10px; flex-wrap: wrap; }
 
-.studio {
-  display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
-  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
-}
+/* bench */
+.bench { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr); gap: 20px; align-items: stretch; scroll-margin-top: 8px; }
 .stage {
-  position: relative; min-width: 0; min-height: 440px;
-  background: radial-gradient(ellipse at 50% 38%, var(--stage-a), var(--stage-b) 78%);
+  position: relative; min-width: 0; min-height: 540px; border-radius: 16px; overflow: hidden; isolation: isolate;
+  background: radial-gradient(120% 85% at 50% 0%, var(--stage-hi), var(--stage) 72%); color: var(--stage-ink);
+  border: 1px solid var(--stage-line);
 }
-.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: grab; }
-.stage canvas.dragging { cursor: grabbing; }
-.stage-tag, .stage-hint, .spin {
-  position: absolute; font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: grab; outline-offset: -4px; }
+#gl.dragging { cursor: grabbing; }
+#gl.point { cursor: pointer; }
+#gl:focus-visible { outline: 2px solid var(--kept); }
+.marks, .tags { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.marks span { position: absolute; left: 0; top: 0; font: 11px var(--font-mono); color: var(--stage-muted); white-space: nowrap; will-change: transform; }
+.marks span.lane { color: var(--stage-ink); font-weight: 500; letter-spacing: 0.04em; }
+.tags button {
+  position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; will-change: transform;
+  font: 500 11px/1 var(--font-mono); color: var(--kept); background: rgba(11, 13, 17, .86); border: 1px solid var(--kept);
+  border-radius: 4px; padding: 4px 6px;
 }
-.stage-tag { top: 14px; left: 16px; right: 16px; color: var(--ink); }
-.stage-hint { bottom: 16px; left: 16px; }
-.spin {
-  bottom: 10px; right: 12px; background: var(--surface); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer;
+.tags button::after { content: ""; position: absolute; inset: -12px -8px; }
+.tags button.sel { background: #fff; color: #0b0d11; border-color: #fff; }
+.tags button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.readout { position: absolute; top: 14px; left: 16px; right: 150px; font: 12px/1.5 var(--font-mono); color: var(--stage-muted); }
+.readout b { color: var(--stage-ink); font-weight: 500; }
+.readout .k { color: var(--kept); }
+.views { position: absolute; top: 9px; right: 10px; margin: 0; padding: 2px; border: 1px solid var(--stage-line); border-radius: 9px; display: flex; background: rgba(11, 13, 17, .7); min-width: 0; }
+.views label { position: relative; }
+.views input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.views span { display: block; padding: 7px 10px; font: 500 12px var(--font-mono); color: var(--stage-muted); border-radius: 6px; }
+.views input:checked + span { background: var(--stage-ink); color: var(--stage); }
+.views input:focus-visible + span { outline: 2px solid var(--kept); outline-offset: 1px; }
+.views input:disabled + span { opacity: .4; }
+.caption {
+  position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); width: max-content; max-width: min(92%, 36rem);
+  text-align: center; font: 600 15px/1.35 var(--font-body); color: var(--cap); background: rgba(0, 0, 0, .62);
+  padding: 6px 12px; border-radius: 4px; text-wrap: balance;
 }
-.nogl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+.caption time { font: 500 11px var(--font-mono); color: var(--stage-muted); margin-right: 8px; }
+.caption .ref { color: #fff; text-decoration-color: #ff8466; -webkit-text-decoration-color: #ff8466; }
+.caption.quiet { color: var(--stage-muted); font-weight: 500; font-size: 13px; }
+.stage-foot { position: absolute; left: 14px; right: 10px; bottom: 9px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font: 11.5px var(--font-mono); color: var(--stage-muted); }
+.chip { font: 500 12px var(--font-mono); color: var(--stage-ink); background: rgba(11, 13, 17, .7); border: 1px solid var(--stage-line); border-radius: 999px; min-height: 32px; padding: 0 12px; cursor: pointer; }
+.chip:focus-visible { outline: 2px solid var(--kept); }
+.drop { position: absolute; inset: 10px; border: 2px dashed var(--kept); border-radius: 10px; display: grid; place-items: center; background: rgba(11, 13, 17, .88); font: 600 17px var(--font-body); z-index: 4; }
+.prog { position: absolute; left: 14px; right: 14px; bottom: 50px; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: rgba(11, 13, 17, .92); border: 1px solid var(--stage-line); font: 12.5px var(--font-mono); z-index: 3; overflow: hidden; }
+.prog span { margin-right: auto; }
+.prog i { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--kept); }
+.sheet { position: absolute; inset: 44px 0 44px; overflow-y: auto; padding: 4px 14px 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 8px; align-content: start; }
+.cell { display: flex; flex-direction: column; gap: 3px; padding: 0; border: 0; background: none; color: var(--stage-muted); font: 10px var(--font-mono); cursor: pointer; text-align: left; opacity: .38; }
+.cell canvas { width: 100%; height: auto; aspect-ratio: 16 / 9; display: block; border-radius: 3px; outline: 1.5px solid transparent; outline-offset: 1px; }
+.cell.kept { opacity: 1; color: var(--kept); }
+.cell.kept canvas { outline-color: var(--kept); }
+.cell.sel { opacity: 1; color: #fff; }
+.cell.sel canvas { outline-color: #fff; outline-width: 2.5px; }
+.cell:focus-visible { outline: none; }
+.cell:focus-visible canvas { outline-color: var(--cap); outline-width: 2.5px; }
+.stage-note { position: absolute; left: 16px; right: 16px; bottom: 44px; font: 12px var(--font-mono); color: var(--stage-muted); }
 
-.panel { border-left: 1px solid var(--line); padding: 22px; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-legend, .lab {
-  padding: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
-}
-legend { margin-bottom: 8px; }
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+/* controls */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.lab, legend.lab { padding: 0; font: 600 12px/1.4 var(--font-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; width: 100%; }
+.lab code { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--ink); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .seg label { position: relative; min-width: 0; }
 .seg label + label { border-left: 1px solid var(--line); }
-.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.seg span { display: block; padding: 9px 4px; text-align: center; font-size: 14px; font-weight: 500; }
-.seg input:checked + span { background: var(--ink); color: var(--bg); }
-.seg input:focus-visible + span { outline: 2px solid var(--screen); outline-offset: -3px; }
-.help { margin: 0; font-size: 13px; color: var(--muted); min-height: 2.9em; }
-
-.sw { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 15px; }
-.sw input { position: absolute; opacity: 0; }
-.sw i {
-  flex: none; width: 38px; height: 22px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s;
-}
-.sw i::after {
-  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--surface); transition: transform .15s;
-}
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg span { display: grid; place-items: center; min-height: 44px; padding: 4px 4px; text-align: center; font-size: 14.5px; font-weight: 500; line-height: 1.2; }
+.seg input:checked + span { background: var(--ink); color: var(--surface); }
+.seg input:focus-visible + span { outline: 2px solid var(--shown); outline-offset: -3px; }
+.help { font-size: 13.5px; color: var(--muted); }
+.ownrow { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; }
+.ownrow .btn { flex: none; }
+.ownrow small { font-size: 12.5px; color: var(--muted); line-height: 1.35; flex: 1 1 11rem; }
+.ownchip { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--shown-soft); color: var(--ink); font-size: 13.5px; }
+.ownchip b { font-weight: 600; overflow-wrap: anywhere; }
+.err { padding: 10px 12px; border-radius: 10px; background: var(--lost-soft); color: var(--lost); font-size: 13.5px; }
+input[type="range"] { width: 100%; margin: 0; accent-color: var(--ink); min-height: 28px; }
+output { font: 500 13px var(--font-mono); color: var(--ink); text-transform: none; letter-spacing: 0; }
+.sw { display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 15px; min-height: 44px; position: relative; }
+.sw input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.sw i { flex: none; width: 40px; height: 24px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s; }
+.sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); transition: transform .15s; }
+.sw input:checked + i { background: var(--shown); }
 .sw input:checked + i::after { transform: translateX(16px); }
-.sw.speech input:checked + i { background: var(--speech); }
-.sw.screen input:checked + i, .sw.mask input:checked + i { background: var(--screen); }
-.sw input:focus-visible + i { outline: 2px solid var(--screen); outline-offset: 2px; }
+.sw input:focus-visible + i { outline: 2px solid var(--shown); outline-offset: 2px; }
 .sw small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.3; }
+.verdict { border-top: 1px solid var(--line); padding-top: 18px; margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+.count { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.count b { font-family: var(--font-display); font-stretch: 112%; font-weight: 800; font-size: 56px; line-height: .9; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.count span { font-size: 14.5px; color: var(--muted); }
+.vmsg { display: flex; flex-direction: column; gap: 8px; }
+.vmsg p { font-size: 14.5px; line-height: 1.45; padding: 9px 12px; border-radius: 9px; }
+.vmsg p.ok { background: var(--shown-soft); }
+.vmsg p.warn { background: var(--lost-soft); color: var(--lost); }
+.vmsg p.note { background: var(--sunk); }
+.vcost { font-size: 13px; color: var(--muted); }
 
-.len { display: flex; align-items: baseline; justify-content: space-between; }
-.len output { font-family: var(--font-mono); font-size: 14px; }
-input[type="range"] { width: 100%; accent-color: var(--ink); margin: 0; }
+/* inspector */
+.stepper { display: flex; gap: 8px; align-items: center; }
+.stepper .btn { width: 44px; padding: 0; font-size: 18px; border-width: 1px; border-color: var(--line); }
+.scrub { position: relative; height: 44px; }
+.ticks { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 1px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.ticks i { flex: 1 1 0; min-width: 0; height: 9px; background: var(--line); border-radius: 1px; }
+.ticks i.kept { height: 26px; background: var(--shown); }
+.ticks i.sel { background: var(--ink); height: 36px; }
+.scrub input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; cursor: pointer; margin: 0; }
+.scrub:focus-within { outline: 2px solid var(--shown); outline-offset: 3px; border-radius: 4px; }
+.in-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .8fr) minmax(0, 1.05fr); gap: 20px 28px; align-items: start; }
+.in-grid > * { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.frame-wrap { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #000; line-height: 0; }
+.frame-wrap canvas { width: 100%; height: auto; display: block; }
+.frame-wrap.drawing { cursor: crosshair; touch-action: none; }
+.mk { position: absolute; background: rgba(0, 0, 0, .78); outline: 1.5px dashed var(--cap); outline-offset: -1.5px; }
+.mk.live { background: rgba(246, 197, 27, .25); }
+figcaption, .fine { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.mask-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.hash-row { display: grid; grid-template-columns: minmax(0, 9fr) minmax(0, 8fr); gap: 14px; align-items: start; }
+.hash-row > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hash-row small { font: 11px var(--font-mono); color: var(--muted); }
+#inThumb { width: 100%; height: auto; aspect-ratio: 9 / 8; image-rendering: pixelated; image-rendering: crisp-edges; border: 1px solid var(--line); display: block; }
+.bits { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; aspect-ratio: 1 / 1; }
+.bits i { background: var(--sunk); border-radius: 1.5px; }
+.bits i.on { background: var(--ink); }
+.bits i.diff { outline: 2px solid var(--lost); outline-offset: -2px; }
+.bits i.diff.on { background: var(--lost); }
+.math { font-size: 15px; line-height: 1.45; }
+.math b { font-family: var(--font-mono); font-weight: 600; }
+.pill { display: inline-block; font: 600 11.5px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; }
+.pill.kept { background: var(--shown-soft); color: var(--shown); }
+.pill.dup { background: var(--sunk); color: var(--muted); }
+.pill.none { background: var(--lost-soft); color: var(--lost); }
 
-.total { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
-.total .big {
-  font-family: var(--font-display); font-weight: 700; font-size: 44px; line-height: 1; letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
+/* markdown output */
+.md { font-size: 14.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.md h4 { margin: 0; font: 700 17px/1.25 var(--font-display); font-stretch: 108%; }
+.md p { margin: 0; }
+.md pre, .raw {
+  margin: 0; font: 12.5px/1.6 var(--font-mono); background: var(--code-bg); color: var(--code-fg);
+  padding: 12px 14px; border-radius: 8px; overflow-x: auto; white-space: pre;
 }
-.total .sub { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tip { margin: 6px 0 0; font-size: 13.5px; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }
+.md .tw { overflow-x: auto; }
+.md table { border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.md th, .md td { text-align: left; padding: 4px 16px 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.md th { font-weight: 600; }
+.md blockquote { margin: 0; padding: 6px 10px; border-left: 3px solid var(--cap); background: var(--said-soft); color: var(--ink); font-size: 13.5px; border-radius: 0 6px 6px 0; }
+.madeup { font-size: 12.5px; color: var(--muted); }
 
-.out { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
-.out h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.01em; margin: 0; }
-.out > div { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.out .cap { margin: 0; color: var(--muted); font-size: 14px; }
-.head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.doc { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.doc-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding: 6px 8px 6px 18px; border-bottom: 1px solid var(--line); font: 12.5px var(--font-mono); color: var(--muted); }
+.doc-bar .sw { font: 13px var(--font-body); min-height: 40px; gap: 9px; }
+.doc-body { padding: 20px 18px 22px; display: flex; flex-direction: column; gap: 18px; }
+.doc-body > h4 { margin: 0; font: 750 20px/1.2 var(--font-display); font-stretch: 108%; }
+.blk { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 6px 14px; align-items: start; }
+.blk > .who { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; padding: 3px 0; text-align: center; border-radius: 4px; margin-top: 2px; }
+.blk.said > .who { background: var(--said-soft); color: var(--said); }
+.blk.shown > .who { background: var(--shown-soft); color: var(--shown); }
+.blk > .body { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.blk .at { font: 600 13px var(--font-mono); color: var(--ink); }
+.blk.said p { font-size: 15.5px; line-height: 1.55; max-width: 44rem; }
+.blk.said p time { font: 12px var(--font-mono); color: var(--muted); margin-right: 8px; }
+.shot { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr); gap: 12px 18px; align-items: start; }
+.shot button { padding: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #000; cursor: pointer; line-height: 0; }
+.shot canvas { width: 100%; height: auto; display: block; }
+.more { font-size: 13.5px; color: var(--lost); background: var(--lost-soft); padding: 8px 12px; border-radius: 8px; }
+.ok-ref { text-decoration: underline; text-decoration-color: var(--shown); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.callout { background: var(--lost-soft); color: var(--lost); border-radius: 10px; padding: 11px 14px; font-size: 14.5px; }
+.callout.calm { background: var(--sunk); color: var(--ink); }
+.raw { border-radius: 0; max-height: 520px; overflow: auto; padding: 18px; }
+.keptgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.keptgrid button { padding: 0; border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; font: 11.5px var(--font-mono); color: var(--muted); text-align: left; }
+.keptgrid canvas { width: 100%; height: auto; display: block; border-radius: 5px; border: 1px solid var(--line); }
 
-.notes { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; font-size: 14.5px; }
-.notes .file { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-.row { display: grid; grid-template-columns: 52px 54px minmax(0, 1fr); gap: 10px; align-items: start; }
-.row .ts { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding-top: 3px; }
-.row .who { font-family: var(--font-mono); font-size: 11px; padding: 2px 0; text-align: center; border-radius: 4px; margin-top: 1px; }
-.row.said .who { background: var(--speech-soft); color: var(--speech); }
-.row.shown .who { background: var(--screen-soft); color: var(--screen); }
-.row.lost .who { background: transparent; color: var(--muted); border: 1px dashed var(--line); }
-.row.lost .body { color: var(--muted); text-decoration: line-through; }
-.row .body { min-width: 0; }
-.row .body p { margin: 0; }
-.row pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; background: var(--code-bg); color: var(--code-fg); padding: 10px 12px; border-radius: 6px; overflow-x: auto; }
-.row .tw { overflow-x: auto; }
-.row table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
-.row th, .row td { text-align: left; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.row th { font-weight: 600; }
-.row .est { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
-.callout { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
-
-.cmd { background: var(--code-bg); border-radius: 12px; padding: 16px 18px; overflow-x: auto; }
-.cmd pre { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.75; color: var(--code-fg); white-space: pre; }
+/* run */
+.run-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 28px 36px; align-items: start; }
+.run-grid > div { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.run-grid p { font-size: 15px; color: var(--muted); }
+.run-grid p b { color: var(--ink); font-weight: 600; }
+.cmd { position: relative; background: var(--code-bg); border-radius: 12px; }
+.cmd pre { margin: 0; font: 12.5px/1.8 var(--font-mono); color: var(--code-fg); white-space: pre; overflow-x: auto; padding: 16px 18px; }
 .cmd .c { color: var(--code-dim); }
-.copy {
-  font: 500 13px var(--font-body); background: var(--ink); color: var(--bg); border: 0; border-radius: 999px;
-  padding: 7px 14px; cursor: pointer; flex: none;
-}
-.basis { margin: 0; font-size: 13px; color: var(--muted); max-width: 46rem; }
-.basis a { text-underline-offset: 3px; }
+.cmd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.say { font: 15px/1.5 var(--font-body); padding: 12px 14px; border-radius: 10px; background: var(--said-soft); color: var(--ink); }
+.needs { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; font: 12.5px var(--font-mono); color: var(--muted); }
+.needs li { border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; }
+.needs li b { color: var(--ink); font-weight: 500; }
 
-@media (max-width: 860px) {
-  .studio { grid-template-columns: minmax(0, 1fr); }
-  .stage { min-height: 0; aspect-ratio: 1 / 1; max-width: 100%; }
-  .panel { border-left: 0; border-top: 1px solid var(--line); padding: 18px 16px; }
-  .out { grid-template-columns: minmax(0, 1fr); }
-  .help { min-height: 0; }
+/* checks */
+.checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 48px; }
+.checks div { display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--line); padding-top: 14px; }
+.checks dt { font-weight: 600; font-size: 16px; }
+.checks dd { color: var(--muted); font-size: 15px; }
+
+footer { display: flex; gap: 8px 22px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+footer span:first-child { margin-right: auto; }
+
+@media (max-width: 980px) {
+  .in-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .in-frame { grid-column: 1 / -1; }
 }
-@media (max-width: 440px) {
-  .row { grid-template-columns: 44px minmax(0, 1fr); }
-  .row .who { grid-column: 2; justify-self: start; padding: 2px 8px; }
-  .row .body { grid-column: 2; }
+@media (max-width: 860px) {
+  .page { gap: 48px; }
+  .hero-row, .bench, .run-grid, .checks { grid-template-columns: minmax(0, 1fr); }
+  .bench { gap: 14px; }
+  .stage { min-height: 0; height: min(92vw, 52vh); max-width: 100%; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; border-radius: 14px; }
+  .panel { padding: 16px; gap: 18px; }
+  .caption { font-size: 13.5px; bottom: 48px; }
+  .readout { font-size: 11px; right: 16px; top: 46px; }
+  .views { left: 10px; right: auto; }
+  .hint { display: none; }
+  .stage-foot { justify-content: flex-end; }
+}
+@media (max-width: 560px) {
+  .in-grid { grid-template-columns: minmax(0, 1fr); }
+  .blk { grid-template-columns: minmax(0, 1fr); }
+  .blk > .who { justify-self: start; padding: 3px 9px; }
+  .shot { grid-template-columns: minmax(0, 1fr); }
+  .shot button { max-width: 220px; }
+  .count b { font-size: 48px; }
+  .top .tag, .top nav .wide, .hero-side p { display: none; }
+  .hero { gap: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
 </style>
 </head>
 <body>
-<div class="page">
+<div class="page" id="top">
   <header class="top">
-    <div class="brand"><b>FrameProof</b><span>video-to-markdown skill · MIT</span></div>
-    <a href="https://github.com/nitishiot/FrameProof">Source on GitHub</a>
+    <a class="brand" href="https://github.com/nitishiot/FrameProof" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><rect x="7.5" y="3" width="14" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".35"/><rect x="5" y="6.5" width="14" height="10" rx="1.5" fill="var(--paper)" stroke="currentColor" stroke-width="1.6" opacity=".65"/><rect x="2.5" y="10" width="14" height="10" rx="1.5" fill="var(--kept)" stroke="currentColor" stroke-width="1.6"/></svg>
+      <b>FrameProof</b>
+    </a>
+    <span class="tag">video-to-markdown skill · MIT</span>
+    <nav aria-label="Page">
+      <a href="#bench" class="wide">Bench</a>
+      <a href="#file" class="wide">Output</a>
+      <a href="#run">Install</a>
+      <a href="https://github.com/nitishiot/FrameProof" target="_blank" rel="noopener">GitHub</a>
+    </nav>
   </header>
 
-  <section class="intro">
-    <h1><span class="s1">What was said</span> and <span class="s2">what was on screen</span>, in one markdown file.</h1>
-    <p>A transcript-only converter drops the video track. FrameProof samples the screen, keeps only the distinct frames, reads them with a vision model and merges the result with the transcript by timestamp. Set up a recording below and watch what survives.</p>
+  <section class="hero">
+    <p class="eyebrow">Screen recording to markdown</p>
+    <h1>“As you can see <span class="ref">here</span>…”</h1>
+    <div class="hero-row">
+      <p class="lede">A transcript keeps that sentence and loses the screen it points at. <b>FrameProof keeps both.</b> It samples the recording, drops the repeat frames, has a vision model read the distinct ones as tables, text and code, and merges them with the speech on one timeline, in one markdown file.</p>
+      <div class="hero-side">
+        <p>The bench below is computed, not replayed. It runs the tool's duplicate check, ported line for line to JavaScript, on a two-minute example recording. Point it at a recording of yours and it does the same; the file never leaves this tab.</p>
+        <div class="cta">
+          <button type="button" class="btn primary" id="heroPick">Try your own recording</button>
+          <a class="btn" href="#run">Install the skill</a>
+        </div>
+      </div>
+    </div>
   </section>
 
-  <section class="studio" aria-label="Pipeline studio">
+  <section class="bench" id="bench" aria-label="Dedupe bench">
     <div class="stage" id="stage">
-      <canvas id="gl" tabindex="0" role="img" aria-label="3D view of a two-minute slice of a recording: sampled frames on a timeline, distinct ones raised, with the speech waveform in front. Use left and right arrow keys to turn it."></canvas>
-      <div class="stage-tag" id="stageTag" aria-live="polite"></div>
-      <div class="stage-hint" id="stageHint">Drag to turn</div>
-      <button class="spin" id="spin" type="button">Pause rotation</button>
-      <div class="nogl" id="nogl" hidden>The 3D view needs WebGL, which this browser has turned off. The settings and output still work.</div>
+      <canvas id="gl" tabindex="0" role="slider" aria-label="View angle of the 3D frame deck" aria-orientation="horizontal" aria-valuemin="-10" aria-valuemax="75" aria-valuenow="20" hidden></canvas>
+      <div class="marks" id="marks" aria-hidden="true"></div>
+      <div class="sheet" id="sheet"></div>
+      <div class="tags" id="tags"></div>
+      <p class="readout" id="readout"></p>
+      <fieldset class="views" id="views">
+        <legend class="vh">View</legend>
+        <label><input type="radio" name="view" id="view-piles" value="piles" disabled><span>Piles</span></label>
+        <label><input type="radio" name="view" id="view-spread" value="spread" disabled><span>Spread</span></label>
+        <label><input type="radio" name="view" id="view-sheet" value="sheet" checked><span>Sheet</span></label>
+      </fieldset>
+      <p class="caption" id="caption"></p>
+      <p class="stage-note" id="stageNote" hidden></p>
+      <div class="prog" id="prog" hidden><span id="progText"></span><button type="button" class="chip" id="progCancel">Cancel</button><i id="progBar"></i></div>
+      <div class="stage-foot"><span class="hint" id="hint">Drag to turn. Tap a frame to inspect it.</span><button type="button" class="chip" id="tour" hidden>Pause tour</button></div>
+      <div class="drop" id="drop" hidden>Drop the recording to sample it here</div>
     </div>
 
-    <form class="panel" id="panel">
-      <fieldset>
-        <legend>Recording</legend>
-        <div class="seg">
+    <form class="panel" id="controls">
+      <fieldset class="field">
+        <legend class="lab">Recording</legend>
+        <div class="seg" id="kindSeg">
           <label><input type="radio" name="kind" id="kind-slides" value="slides" checked><span>Slide deck</span></label>
           <label><input type="radio" name="kind" id="kind-app" value="app"><span>App screen</span></label>
           <label><input type="radio" name="kind" id="kind-head" value="head"><span>Talking head</span></label>
         </div>
         <p class="help" id="kindHelp"></p>
+        <div class="ownrow" id="ownRow">
+          <button type="button" class="btn small" id="pick">Use your own recording</button>
+          <small>Sampled in this tab, first ten minutes. Nothing is uploaded.</small>
+          <input type="file" id="fileIn" accept="video/*" class="vh" tabindex="-1" aria-hidden="true">
+        </div>
+        <div class="ownchip" id="ownChip" hidden><span><b id="ownName"></b> <span id="ownMeta"></span></span><button type="button" class="btn small" id="ownBack">Back to the examples</button></div>
+        <p class="err" id="ownErr" hidden role="alert"></p>
       </fieldset>
 
-      <fieldset>
-        <legend>Sample one frame every</legend>
+      <fieldset class="field">
+        <legend class="lab"><span>Sample one frame every</span><code>--interval</code></legend>
         <div class="seg">
           <label><input type="radio" name="interval" id="int-2" value="2"><span>2 s</span></label>
           <label><input type="radio" name="interval" id="int-5" value="5" checked><span>5 s</span></label>
@@ -239,385 +421,1242 @@ input[type="range"] { width: 100%; accent-color: var(--ink); margin: 0; }
         </div>
       </fieldset>
 
-      <fieldset>
-        <legend>Streams</legend>
-        <label class="sw speech"><input type="checkbox" id="speech" checked><i></i><span>Speech<small>Whisper transcript, timestamped</small></span></label>
-        <label class="sw screen"><input type="checkbox" id="screen" checked><i></i><span>Screen<small>Distinct frames read by a vision model</small></span></label>
-        <label class="sw mask" id="maskRow" hidden><input type="checkbox" id="mask"><i></i><span>Mask clock and ticker<small>Blank volatile regions before hashing</small></span></label>
-      </fieldset>
-
-      <div>
-        <div class="len"><label class="lab" for="minutes">Recording length</label><output id="minOut" for="minutes"></output></div>
-        <input type="range" id="minutes" min="5" max="180" step="5" value="40">
+      <div class="field">
+        <label class="lab" for="thr"><span>Duplicate when fewer bits differ than</span><code>--threshold</code></label>
+        <input type="range" id="thr" min="1" max="40" step="1" value="6" aria-describedby="thrOut">
+        <output id="thrOut" for="thr"></output>
       </div>
 
-      <div class="total" aria-live="polite">
-        <span class="lab">Vision calls, whole recording</span>
-        <span class="big" id="big"></span>
-        <span class="sub" id="sub"></span>
-        <p class="tip" id="tip" hidden></p>
+      <label class="sw" id="maskRow" hidden><input type="checkbox" id="mask"><i></i><span>Mask the clock, ticker and taskbar<small>Painted black before hashing, as SKILL.md describes</small></span></label>
+
+      <div class="verdict">
+        <div class="count"><b id="vKept">0</b><span id="vOf"></span></div>
+        <div class="vmsg" id="vMsg" aria-live="polite"></div>
+        <p class="vcost" id="vCost"></p>
       </div>
     </form>
   </section>
 
-  <section class="out">
-    <div>
-      <h2>What lands in notes.md</h2>
-      <p class="cap">Example output for the two-minute slice on the turntable. The talk and its numbers are made up.</p>
-      <div class="notes" id="notes"></div>
+  <section class="sec" id="inspect" aria-labelledby="inH">
+    <div class="sec-head">
+      <h2 id="inH">One frame, start to finish</h2>
+      <div class="stepper">
+        <span class="mono" id="inPos" style="font-size:13px;color:var(--muted)"></span>
+        <button type="button" class="btn" id="prev" aria-label="Previous sampled frame">←</button>
+        <button type="button" class="btn" id="next" aria-label="Next sampled frame">→</button>
+      </div>
     </div>
-    <div>
-      <div class="head"><h2>Commands for this setup</h2><button class="copy" id="copy" type="button">Copy</button></div>
-      <p class="cap">Run from <span class="mono">skills/video-to-markdown</span>. Needs ffmpeg, Python 3 and an Anthropic API key.</p>
-      <div class="cmd"><pre id="cmd"></pre></div>
+    <div class="scrub"><div class="ticks" id="ticks" aria-hidden="true"></div><input type="range" id="scrub" min="0" max="23" step="1" value="0" aria-label="Sampled frame"></div>
+    <div class="in-grid">
+      <figure class="in-frame">
+        <div class="frame-wrap" id="frameWrap"><canvas id="inFrame" width="640" height="360"></canvas><div id="maskLayer"></div></div>
+        <figcaption id="inCap"></figcaption>
+        <div class="mask-tools" id="maskTools" hidden>
+          <button type="button" class="btn small" id="maskDraw" aria-pressed="false">Draw a mask</button>
+          <button type="button" class="btn small" id="maskClear">Clear masks</button>
+          <span class="fine">Cover a clock, ticker or webcam so it cannot fire the hash.</span>
+        </div>
+      </figure>
+      <div class="in-hash">
+        <h3>What the hash sees</h3>
+        <div class="hash-row">
+          <div><canvas id="inThumb" width="9" height="8" role="img" aria-label="The frame reduced to 9 by 8 grey pixels"></canvas><small>9 × 8 grey pixels</small></div>
+          <div><div class="bits" id="inBits" role="img" aria-label="64-bit hash"></div><small>64 bits</small></div>
+        </div>
+        <p class="math" id="inMath"></p>
+        <p class="fine">Each bit says whether a pixel is brighter than its right-hand neighbour. Bits that differ from the last kept frame are marked. The script keeps a frame only when at least <code>--threshold</code> bits differ.</p>
+      </div>
+      <div class="in-vision">
+        <h3>What the vision step returns</h3>
+        <div id="inVision" class="md"></div>
+      </div>
     </div>
   </section>
 
-  <p class="basis">The call counts are a rough guide built from the figures in <a href="https://github.com/nitishiot/FrameProof/blob/main/skills/video-to-markdown/SKILL.md">SKILL.md</a>: a typical 40-minute talk keeps 20 to 40 distinct frames, and one 10-minute terminal recording kept 44 frames unmasked while showing only 4 distinct screens. The vision pass runs once per kept frame, so that count is where nearly all the cost sits.</p>
+  <section class="sec" id="file" aria-labelledby="fileH">
+    <div class="sec-head">
+      <h2 id="fileH">What lands in the file</h2>
+      <div class="seg" id="fileSeg" style="min-width:min(100%,21rem)">
+        <label><input type="radio" name="fileMode" id="fm-speech" value="speech"><span>Transcript only</span></label>
+        <label><input type="radio" name="fileMode" id="fm-both" value="both" checked><span>With FrameProof</span></label>
+      </div>
+    </div>
+    <p class="cap" id="fileCap"></p>
+    <div class="doc">
+      <div class="doc-bar"><span id="docName">notes-raw.md</span><label class="sw" id="rawRow"><input type="checkbox" id="rawView"><i></i><span>Raw markdown</span></label></div>
+      <div class="doc-body" id="docBody"></div>
+      <pre class="raw" id="docRaw" tabindex="0" aria-label="Raw markdown" hidden></pre>
+    </div>
+    <p class="cap" id="fileAfter"><code>notes-raw.md</code> is the faithful merge the scripts write. The skill's last step has Claude rewrite it as <code>notes.md</code>: a title and summary, topic headings instead of the clock, speech turned into prose, every table and code block left intact.</p>
+  </section>
+
+  <section class="sec" id="run" aria-labelledby="runH">
+    <h2 id="runH">Run it</h2>
+    <div class="run-grid">
+      <div>
+        <h3>As a Claude Code skill</h3>
+        <p>Copy one folder into your skills directory. Claude picks it up when you ask for notes from a recording.</p>
+        <div class="cmd"><pre tabindex="0" aria-label="Install commands" id="installCmd">git clone https://github.com/nitishiot/FrameProof
+cp -r FrameProof/skills/video-to-markdown ~/.claude/skills/</pre></div>
+        <p class="say">“Turn recording.mp4 into notes. The slides matter.”</p>
+        <p>Use <code>.claude/skills/</code> inside a project to keep it to that project.</p>
+      </div>
+      <div>
+        <div class="cmd-head"><h3 id="cmdH">Or step by step, for the setup on the bench</h3><button type="button" class="btn small" id="copy">Copy</button></div>
+        <div class="cmd"><pre id="cmd" tabindex="0" aria-labelledby="cmdH"></pre></div>
+        <div class="cmd" id="maskCmdBox" hidden><pre id="maskCmd" tabindex="0" aria-label="Mask list for this recording"></pre></div>
+        <ul class="needs" aria-label="Requirements">
+          <li><b>ffmpeg</b> required</li>
+          <li><b>Python 3</b> with pillow, openai-whisper</li>
+          <li><b>Anthropic API key</b></li>
+          <li><b>tesseract</b> optional, for <span class="mono">--ocr</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="check" aria-labelledby="checkH">
+    <h2 id="checkH">What to check before you trust it</h2>
+    <dl class="checks">
+      <div><dt>Numbers read off a chart are estimates</dt><dd>When a chart prints no values, the model reads heights off pixels. Those tables carry the line <code>&gt; Values estimated from the chart; verify.</code> and the synthesis step is told never to drop it. <code>--embed-images</code> puts each frame next to its table so you can spot-check.</dd></div>
+      <div><dt>Kept frames leave your machine</dt><dd>Whisper runs locally. The frames that survive the duplicate check are sent to the Anthropic API to be read, one call per frame, which is also where nearly all the cost sits.</dd></div>
+      <div><dt>App recordings need masking by hand</dt><dd>A clock or ticker changes on every sample. <code>extract_frames.py</code> has no mask option; SKILL.md gives a short snippet that blanks the regions you list before hashing.</dd></div>
+      <div><dt>A missing stream is declared, not hidden</dt><dd>If transcription or the vision pass was skipped or blocked, the skill puts a callout at the top of the document saying what is absent. Frames that fail are listed in <code>failed_frames.json</code> and rerun with <code>--retry-failed</code>.</dd></div>
+      <div><dt>Timestamps mark a window, not an instant</dt><dd>Each frame is labelled with the start of its sampling window and taken from near the middle of it, so a label can sit up to half an interval before the frame.</dd></div>
+      <div><dt>Long recordings: tune on a slice first</dt><dd>Past about 90 minutes, cut ten minutes with <code>ffmpeg -ss 0 -t 600</code>, settle the interval and threshold there, then run the whole file.</dd></div>
+    </dl>
+  </section>
+
+  <footer>
+    <span>FrameProof · MIT licence · Example recordings, speech and figures on this page are invented.</span>
+    <a href="https://github.com/nitishiot/FrameProof/blob/main/skills/video-to-markdown/SKILL.md" target="_blank" rel="noopener">SKILL.md</a>
+    <a href="https://github.com/nitishiot/FrameProof#readme" target="_blank" rel="noopener">README</a>
+    <a href="https://github.com/nitishiot/FrameProof/wiki" target="_blank" rel="noopener">Write-up</a>
+  </footer>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script async id="three-lib" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function () {
   'use strict';
+  /* ================= util ================= */
   var $ = function (id) { return document.getElementById(id); };
-  var SLICE = 120; // seconds shown on the turntable
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var state = { kind: 'slides', interval: 5, speech: true, screen: true, mask: false, minutes: 40, spin: !reduced };
-
-  var KIND = {
-    slides: { label: 'slide deck', help: 'Slides and charts held on screen while someone talks. The case the skill is built for.',
-              cuts: [0, 48, 95], tex: ['chart', 'code', 'table'] },
-    app:    { label: 'app recording', help: 'An IDE, terminal or dashboard. A clock or ticker changes every second and fools the duplicate check.',
-              cuts: [0, 70], tex: ['app', 'dialog'] },
-    head:   { label: 'talking head', help: 'A face and a voice. Nothing on screen to extract, so the visual steps are skipped.',
-              cuts: [0], tex: ['head'] }
-  };
-
-  /* ---------- model ---------- */
-  function sampleTimes() { var a = []; for (var t = 0; t < SLICE; t += state.interval) a.push(t); return a; }
-  function segOf(t, cuts) { var s = 0; for (var i = 0; i < cuts.length; i++) if (t >= cuts[i]) s = i; return s; }
-  function noise(t) { var x = Math.sin(t * 12.9898 + 4.1) * 43758.5453; return x - Math.floor(x); }
-  function keptFlags(times) {
-    var cuts = KIND[state.kind].cuts, prev = -1;
-    return times.map(function (t) {
-      var s = segOf(t, cuts), first = s !== prev; prev = s;
-      if (!state.screen) return false;
-      if (first) return true;
-      return state.kind === 'app' && !state.mask && noise(t) < 0.37;
-    });
-  }
-  function estimate() {
-    var samples = Math.round(state.minutes * 60 / state.interval);
-    if (!state.screen || state.kind === 'head') return { samples: 0, lo: 0, hi: 0 };
-    if (state.kind === 'slides') return { samples: samples, lo: Math.min(samples, Math.round(state.minutes * 0.5)), hi: Math.min(samples, state.minutes) };
-    var n = state.mask ? Math.max(1, Math.round(state.minutes * 0.4)) : Math.round(samples * 0.37);
-    n = Math.min(samples, n);
-    return { samples: samples, lo: n, hi: n };
-  }
-  function fmt(n) { return n.toLocaleString('en-US'); }
-
-  /* ---------- panel + readouts ---------- */
-  function renderPanel() {
-    $('kindHelp').textContent = KIND[state.kind].help;
-    $('maskRow').hidden = state.kind !== 'app';
-    $('minOut').textContent = state.minutes + ' min';
-    var e = estimate(), big, sub;
-    if (!state.screen) { big = '0'; sub = 'Screen stream is off. Nothing is sampled.'; }
-    else if (state.kind === 'head') { big = '0'; sub = 'Frame extraction skipped. Notes come from the transcript.'; }
-    else {
-      big = (e.lo === e.hi ? '≈ ' + fmt(e.lo) : fmt(e.lo) + '–' + fmt(e.hi));
-      sub = fmt(e.samples) + ' frames sampled, ' + (e.lo === e.hi ? 'about ' + fmt(e.lo) : fmt(e.lo) + ' to ' + fmt(e.hi)) + ' kept as distinct.';
-    }
-    $('big').textContent = big; $('sub').textContent = sub;
-
-    var tip = '';
-    if (!state.screen && !state.speech) tip = 'Both streams are off, so there is nothing to convert. Turn one back on.';
-    else if (!state.screen && state.kind !== 'head') tip = 'This is what a transcript-only converter gives you. Every chart, table and code block is gone.';
-    else if (state.kind === 'app' && !state.mask) tip = 'The clock and ticker fire the duplicate check on unchanged screens. Mask them before hashing.';
-    else if (state.minutes > 90) tip = 'Over about 90 minutes, tune the settings on a 10-minute slice first.';
-    else if (!state.speech) tip = 'Silent capture: skip Whisper and pass no transcript to build_notes.py.';
-    else if (state.kind !== 'head' && state.interval <= 2) tip = 'A short interval catches slides that are only up for a few seconds, at the cost of more sampling.';
-    else if (state.kind !== 'head' && state.interval >= 10) tip = 'A long interval is cheaper on long recordings but can miss a slide that is only up briefly.';
-    $('tip').hidden = !tip; $('tip').textContent = tip;
-  }
-
-  /* ---------- notes.md preview ---------- */
   function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
-  function row(kind, ts, who, body) {
-    var r = el('div', 'row ' + kind); r.appendChild(el('span', 'ts', ts)); r.appendChild(el('span', 'who', who));
-    var b = el('div', 'body'); if (typeof body === 'string') b.appendChild(el('p', null, body)); else b.appendChild(body);
-    r.appendChild(b); return r;
-  }
-  function table(head, rows) {
-    var w = el('div', 'tw'), t = el('table'), tr = el('tr');
-    head.forEach(function (h) { tr.appendChild(el('th', null, h)); }); t.appendChild(tr);
-    rows.forEach(function (r) { var x = el('tr'); r.forEach(function (c) { x.appendChild(el('td', null, c)); }); t.appendChild(x); });
-    w.appendChild(t); return w;
-  }
-  function renderNotes() {
-    var box = $('notes'); box.textContent = '';
-    box.appendChild(el('div', 'file', 'notes.md · 00:00 to 02:00'));
-    var hasScreen = state.screen && state.kind !== 'head';
-    if (!state.speech && !state.screen) { box.appendChild(el('div', 'callout', 'Nothing to write. Both streams are off.')); return; }
-    if (!state.speech) box.appendChild(el('div', 'callout', 'Partial output: no transcript. This document holds on-screen content only.'));
-    if (!state.screen && state.kind !== 'head') box.appendChild(el('div', 'callout', 'Partial output: the video track was not processed. Anything shown but not said is missing.'));
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function mmss(t) { t = Math.max(0, Math.floor(t + 1e-6)); return pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); }
+  function hhmmss(t) { t = Math.max(0, Math.floor(t + 1e-6)); return pad2(Math.floor(t / 3600)) + ':' + pad2(Math.floor((t % 3600) / 60)) + ':' + pad2(t % 60); }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  var mqReduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var reduced = mqReduced.matches;
+  var SLICE = 120, FW = 320, FH = 180;
 
-    var chart = document.createElement('div');
-    chart.appendChild(table(['Build', 'Seconds'], [['Cold', '212'], ['Cached', '38']]));
-    chart.appendChild(el('div', 'est', '> Values estimated from the chart; verify.'));
-    var parts = [
-      { ts: '00:00', said: 'Cold builds had crept past three minutes. Here is where the time goes, and what the cache gives back.',
-        shown: chart, lost: 'Bar chart of build times' },
-      { ts: '00:48', said: 'The whole fix is two lines of config. The key changes only when the lockfile does.',
-        shown: el('pre', null, 'cache:\n  key: deps-{{ checksum "package-lock.json" }}\n  paths: [node_modules]'), lost: 'Config file shown in the editor' },
-      { ts: '01:35', said: 'And the saving holds on all three services, not just the one we tuned.',
-        shown: table(['Service', 'Before', 'After'], [['api', '212 s', '38 s'], ['web', '164 s', '41 s'], ['worker', '97 s', '29 s']]), lost: 'Results table for three services' }
-    ];
-    parts.forEach(function (p) {
-      if (state.speech) box.appendChild(row('said', p.ts, 'said', p.said));
-      if (hasScreen) box.appendChild(row('shown', p.ts, 'shown', p.shown));
-      else if (state.kind !== 'head') box.appendChild(row('lost', p.ts, 'lost', p.lost));
+  /* ================= 1. three invented recordings, drawn at any time t ================= */
+  var SANS = '"Archivo", "Helvetica Neue", Arial, sans-serif';
+  var MONO = '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace';
+  function rr(g, x, y, w, h, r) {
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  function tx(g, s, x, y, size, color, o) {
+    o = o || {};
+    g.font = (o.w || 500) + ' ' + size + 'px ' + (o.mono ? MONO : SANS);
+    g.fillStyle = color; g.textAlign = o.a || 'left'; g.textBaseline = 'alphabetic'; g.fillText(s, x, y);
+  }
+  function pointer(g, x, y) {
+    g.save(); g.translate(x, y); g.beginPath();
+    g.moveTo(0, 0); g.lineTo(0, 10); g.lineTo(2.7, 7.6); g.lineTo(4.7, 11.8); g.lineTo(6.3, 11); g.lineTo(4.4, 7); g.lineTo(7.8, 6.9); g.closePath();
+    g.fillStyle = '#fff'; g.fill(); g.lineWidth = 0.8; g.strokeStyle = '#111'; g.stroke(); g.restore();
+  }
+  var BARS = [['deps', 124], ['compile', 41], ['test', 33], ['package', 14]];
+  function webcam(g, t) {
+    var x = 258, y = 130, w = 54, h = 40;
+    g.save(); rr(g, x, y, w, h, 4); g.clip();
+    g.fillStyle = '#31404f'; g.fillRect(x, y, w, h);
+    var dx = 1.2 * Math.sin(t * 0.83) + 0.5 * Math.sin(t * 2.1), dy = 0.7 * Math.sin(t * 1.31);
+    g.fillStyle = '#c9a58b'; g.beginPath(); g.arc(x + 27 + dx, y + 16 + dy, 8.5, 0, 6.3); g.fill();
+    g.fillStyle = '#5b7a99'; g.beginPath(); g.ellipse(x + 27 + dx * 0.6, y + 42, 18, 14, 0, 0, 6.3); g.fill();
+    g.restore();
+  }
+  function slideFoot(g, n, dark) {
+    var c = dark ? 'rgba(255,255,255,.55)' : 'rgba(20,24,40,.5)';
+    tx(g, 'Build cache retro', 14, 172, 6.5, c); tx(g, n + ' / 14', 244, 172, 6.5, c, { a: 'right' });
+  }
+  function drawSlides(g, t, id) {
+    if (id === 'chart') {
+      g.fillStyle = '#f6f5f0'; g.fillRect(0, 0, FW, FH);
+      tx(g, 'Where a cold build spends its time', 14, 24, 12.5, '#161a28', { w: 700 });
+      tx(g, 'seconds per stage, main branch', 14, 37, 7.5, '#5d6475');
+      var x0 = 34, y0 = 148, top = 52, max = 150;
+      g.strokeStyle = '#d5d4cc'; g.lineWidth = 0.7;
+      [0, 50, 100, 150].forEach(function (v) {
+        var y = y0 - (v / max) * (y0 - top);
+        g.beginPath(); g.moveTo(x0, y); g.lineTo(240, y); g.stroke();
+        tx(g, String(v), x0 - 5, y + 2.5, 6.5, '#7a8090', { a: 'right' });
+      });
+      BARS.forEach(function (b, i) {
+        var h = (b[1] / max) * (y0 - top), x = x0 + 14 + i * 50;
+        g.fillStyle = i === 0 ? '#d8452b' : '#3a4257'; g.fillRect(x, y0 - h, 30, h);
+        tx(g, b[0], x + 15, y0 + 10, 7, '#3a4257', { a: 'center' });
+      });
+      slideFoot(g, 6, false);
+    } else if (id === 'headline') {
+      g.fillStyle = '#17203a'; g.fillRect(0, 0, FW, FH);
+      tx(g, 'COLD BUILD, SAME COMMIT', 22, 44, 7.5, '#9fb0d8', { w: 600 });
+      tx(g, '212 s', 22, 98, 40, '#ffffff', { w: 800 });
+      tx(g, '→', 136, 95, 28, '#f6c51b', { w: 700 });
+      tx(g, '38 s', 176, 98, 40, '#f6c51b', { w: 800 });
+      tx(g, 'after keying the dependency cache on the lockfile', 22, 122, 7.5, '#c4cde6');
+      slideFoot(g, 7, true);
+    } else if (id === 'code') {
+      g.fillStyle = '#f6f5f0'; g.fillRect(0, 0, FW, FH);
+      tx(g, 'The whole fix', 14, 24, 12.5, '#161a28', { w: 700 });
+      g.fillStyle = '#1b1f2e'; rr(g, 14, 36, 236, 86, 5); g.fill();
+      g.fillStyle = '#262b3d'; g.fillRect(14, 40, 20, 78);
+      ['# .ci/config.yml', 'cache:', '  key: deps-{{ checksum "package-lock.json" }}', '  paths:', '    - node_modules'].forEach(function (ln, i) {
+        tx(g, String(i + 1), 29, 54 + i * 15, 6.4, '#6b738c', { mono: true, a: 'right' });
+        tx(g, ln, 40, 54 + i * 15, 6.6, i === 0 ? '#7f89a6' : (i === 2 ? '#f6c51b' : '#e8ebf5'), { mono: true });
+      });
+      slideFoot(g, 8, false);
+    } else {
+      g.fillStyle = '#f6f5f0'; g.fillRect(0, 0, FW, FH);
+      tx(g, 'Same change, three services', 14, 24, 12.5, '#161a28', { w: 700 });
+      [['Service', 'Before', 'After'], ['api', '212 s', '38 s'], ['web', '164 s', '41 s'], ['worker', '97 s', '29 s']].forEach(function (r, i) {
+        var y = 40 + i * 22;
+        if (i === 0) { g.fillStyle = '#161a28'; g.fillRect(14, y, 230, 19); }
+        else { g.fillStyle = i % 2 ? '#e9e8e1' : '#f6f5f0'; g.fillRect(14, y, 230, 21); }
+        r.forEach(function (c, j) { tx(g, c, 24 + j * 78, y + 13.5, 8.5, i === 0 ? '#fff' : (j === 2 ? '#b23a22' : '#161a28'), { w: i === 0 || j === 2 ? 700 : 500 }); });
+      });
+      slideFoot(g, 9, false);
+    }
+    webcam(g, t);
+    pointer(g, 262 + 5 * Math.sin(t * 0.21 + 1), 74 + 2 * Math.sin(t * 0.33)); // idling in the slide margin
+  }
+
+  var SERVICES = [['api', '4815', 'degraded', '2.4 %'], ['web', '2291', 'healthy', '0.1 %'], ['worker', '1178', 'healthy', '0.0 %'],
+                  ['auth', '0932', 'healthy', '0.2 %'], ['search', '3310', 'healthy', '0.1 %'], ['billing', '0457', 'healthy', '0.0 %']];
+  var LOGLINES = ['14:02:51  drain  api-7f9c  ok', '14:02:58  start  api@4812  3 pods', '14:03:09  probe  /healthz  200 200 200',
+                  '14:03:10  route  100 % -> 4812', '14:03:11  error rate  2.4 % -> 0.1 %', '14:03:12  done   took 21 s'];
+  var COMPARE = [['', '4815', '4812'], ['p95 latency', '840 ms', '210 ms'], ['error rate', '2.4 %', '0.1 %'], ['memory', '1.9 GB', '1.1 GB'], ['cold start', '9.2 s', '4.0 s']];
+  function appChrome(g, t) {
+    var sec = 7 + Math.floor(t), mm = 2 + Math.floor(sec / 60), i, x;
+    g.fillStyle = '#0c0f16'; g.fillRect(0, 0, FW, 10);
+    tx(g, 'Release board, staging', 6, 7.4, 6, '#aab3c7');
+    tx(g, '14:' + pad2(mm) + ':' + pad2(sec % 60), 314, 7.4, 6, '#e8ecf6', { a: 'right', mono: true });
+    g.fillStyle = '#161b27'; g.fillRect(0, 10, FW, 11);
+    var off = (t * 23) % 46;
+    for (i = -1; i < 9; i++) {
+      x = i * 46 - off + 46;
+      g.fillStyle = (i + Math.floor(t / 2)) % 3 === 0 ? '#f0603f' : '#39c796'; g.fillRect(x, 12.5, 20 + ((i + 9) % 3) * 7, 6);
+    }
+    g.fillStyle = '#05070b'; g.fillRect(0, 167, FW, 13);
+    for (i = 0; i < 6; i++) { g.fillStyle = i === 1 ? '#e8ecf6' : '#3b4458'; rr(g, 8 + i * 14, 170.5, 9, 6.5, 1.5); g.fill(); }
+    var act = (Math.floor(t * 0.7) % 5);
+    for (i = 0; i < 5; i++) { g.fillStyle = i === act ? '#f6c51b' : '#2a3142'; g.fillRect(150 + i * 22, 171, 16, 6); }
+    tx(g, '14:' + pad2(mm), 314, 177, 6, '#e8ecf6', { a: 'right', mono: true });
+  }
+  function appNav(g, active) {
+    g.fillStyle = '#131824'; g.fillRect(0, 21, 58, 146);
+    ['Board', 'Deploys', 'Logs', 'Compare', 'Alerts'].forEach(function (n, i) {
+      if (i === active) { g.fillStyle = '#243049'; g.fillRect(0, 28 + i * 16, 58, 13); }
+      tx(g, n, 9, 37.5 + i * 16, 6.8, i === active ? '#fff' : '#8792aa', { w: i === active ? 700 : 500 });
     });
-    if (state.kind === 'head' && state.speech) box.appendChild(el('div', 'file', 'No on-screen content in this recording, so the transcript is the whole document.'));
+  }
+  function drawBoard(g, t, live) {
+    g.fillStyle = '#1b2130'; g.fillRect(58, 21, 262, 146);
+    tx(g, 'Services', 68, 36, 10, '#fff', { w: 700 });
+    var hover = 0; // the presenter rests on the row being discussed
+    ['Service', 'Build', 'Status', 'Errors'].forEach(function (h, j) { tx(g, h, 70 + j * 60, 50, 6.2, '#7f8aa3', { w: 600 }); });
+    SERVICES.forEach(function (r, i) {
+      var y = 55 + i * 17;
+      g.fillStyle = i === hover && live ? '#222b3f' : (i % 2 ? '#1e2535' : '#1b2130'); g.fillRect(64, y, 250, 15);
+      r.forEach(function (c, j) { tx(g, c, 70 + j * 60, y + 10.3, 7, j === 2 ? (c === 'healthy' ? '#39c796' : '#f0603f') : '#dfe4f0', { mono: j === 1 || j === 3, w: j === 0 ? 700 : 500 }); });
+    });
+    if (live) pointer(g, 150 + 5 * Math.sin(t * 0.29), 60 + 2 * Math.sin(t * 0.41));
+  }
+  function drawApp(g, t, id) {
+    g.fillStyle = '#1b2130'; g.fillRect(0, 0, FW, FH);
+    if (id === 'board' || id === 'dialog') {
+      appNav(g, 0); drawBoard(g, t, id === 'board');
+      if (id === 'dialog') {
+        g.fillStyle = '#f4f5f8'; rr(g, 112, 62, 136, 70, 5); g.fill();
+        tx(g, 'Roll back api?', 121, 77, 9, '#141826', { w: 700 });
+        [['Running build', '4815'], ['Last healthy', '4812'], ['Downtime', 'none']].forEach(function (r, i) {
+          tx(g, r[0], 121, 90 + i * 10, 6.6, '#5a6275'); tx(g, r[1], 239, 90 + i * 10, 6.6, '#141826', { a: 'right', mono: true, w: 600 });
+        });
+        g.fillStyle = '#dfe2ea'; rr(g, 150, 116, 40, 11, 2.5); g.fill(); tx(g, 'Cancel', 170, 123.8, 6.2, '#141826', { a: 'center' });
+        g.fillStyle = '#d8452b'; rr(g, 195, 116, 44, 11, 2.5); g.fill(); tx(g, 'Roll back', 217, 123.8, 6.2, '#fff', { a: 'center', w: 700 });
+        pointer(g, 214 + 3 * Math.sin(t * 2), 120);
+      }
+    } else if (id === 'log') {
+      appNav(g, 2);
+      g.fillStyle = '#0a0d13'; g.fillRect(58, 21, 262, 146);
+      g.fillStyle = '#14301f'; g.fillRect(58, 21, 262, 16);
+      tx(g, 'api · rollback to 4812 · complete', 68, 32, 7.4, '#62e0a8', { w: 700 });
+      LOGLINES.forEach(function (ln, i) { tx(g, ln, 68, 52 + i * 14, 7, i === 4 ? '#f6c51b' : '#b9c2d6', { mono: true }); });
+      pointer(g, 236 + 5 * Math.sin(t * 0.3), 128 + 2 * Math.sin(t * 0.5));
+    } else {
+      appNav(g, 3);
+      g.fillStyle = '#eef0f5'; g.fillRect(58, 21, 262, 146);
+      tx(g, 'Compare builds', 68, 37, 10, '#141826', { w: 700 });
+      COMPARE.forEach(function (r, i) {
+        var y = 45 + i * 21;
+        if (i === 0) { g.fillStyle = '#141826'; g.fillRect(64, y, 250, 16); }
+        else { g.fillStyle = i % 2 ? '#fff' : '#e2e5ee'; g.fillRect(64, y, 250, 20); }
+        r.forEach(function (c, j) { tx(g, c, 72 + j * 84, y + (i === 0 ? 11 : 13), 7.6, i === 0 ? '#fff' : (j === 1 ? '#b23a22' : '#141826'), { mono: j > 0, w: j === 0 ? 600 : 500 }); });
+      });
+      pointer(g, 204 + 5 * Math.sin(t * 0.25), 114 + 2 * Math.sin(t * 0.4));
+    }
+    appChrome(g, t);
+  }
+  function drawHead(g, t) {
+    var grad = g.createLinearGradient(0, 0, FW, FH); grad.addColorStop(0, '#3b4552'); grad.addColorStop(1, '#222933');
+    g.fillStyle = grad; g.fillRect(0, 0, FW, FH);
+    g.fillStyle = '#2b333f'; g.fillRect(0, 0, 66, FH);
+    g.fillStyle = '#566170'; g.fillRect(232, 26, 58, 42); g.fillStyle = '#6f7c8d'; g.fillRect(238, 32, 46, 30);
+    var dx = 1.4 * Math.sin(t * 0.6) + 0.5 * Math.sin(t * 1.9), dy = 0.7 * Math.sin(t * 1.1);
+    g.fillStyle = '#4f6b8a'; g.beginPath(); g.ellipse(160 + dx * 0.5, 196, 82, 64, 0, 0, 6.3); g.fill();
+    g.fillStyle = '#b78f76'; g.fillRect(150 + dx * 0.8, 112 + dy, 20, 24);
+    g.fillStyle = '#c9a58b'; g.beginPath(); g.ellipse(160 + dx, 84 + dy, 29, 35, 0, 0, 6.3); g.fill();
+    g.fillStyle = '#3b2f2a'; g.beginPath(); g.ellipse(160 + dx, 62 + dy, 30, 19, 0, 3.14, 6.29); g.fill();
+    g.fillStyle = '#2a2320'; g.beginPath(); g.arc(149 + dx, 82 + dy, 2.4, 0, 6.3); g.arc(171 + dx, 82 + dy, 2.4, 0, 6.3); g.fill();
+    g.fillStyle = '#7a3b34'; g.beginPath(); g.ellipse(160 + dx, 102 + dy, 6.5, 1.4 + 2.4 * Math.abs(Math.sin(t * 4.3)), 0, 0, 6.3); g.fill();
+    if (t < 9) {
+      g.fillStyle = 'rgba(10,12,18,.82)'; g.fillRect(18, 138, 132, 26); g.fillStyle = '#f6c51b'; g.fillRect(18, 138, 3, 26);
+      tx(g, 'Platform team', 28, 149, 8.5, '#fff', { w: 700 }); tx(g, 'Weekly update', 28, 159, 6.8, '#c5ccdb');
+    }
+  }
+
+  var MD = {
+    chart: '**Where a cold build spends its time** (seconds per stage, main branch)\n\n| Stage | Seconds |\n|---|---|\n| deps | 125 |\n| compile | 40 |\n| test | 35 |\n| package | 15 |\n\n> Values estimated from the chart; verify.',
+    headline: '## 212 s → 38 s\n\nCold build, same commit, after keying the dependency cache on the lockfile.',
+    code: '**The whole fix**\n\n```yaml\n# .ci/config.yml\ncache:\n  key: deps-{{ checksum "package-lock.json" }}\n  paths:\n    - node_modules\n```',
+    table: '**Same change, three services**\n\n| Service | Before | After |\n|---|---|---|\n| api | 212 s | 38 s |\n| web | 164 s | 41 s |\n| worker | 97 s | 29 s |',
+    board: '**Services**\n\n| Service | Build | Status | Errors |\n|---|---|---|---|\n' + SERVICES.map(function (r) { return '| ' + r.join(' | ') + ' |'; }).join('\n'),
+    dialog: '**Roll back api?**\n\n| Field | Value |\n|---|---|\n| Running build | 4815 |\n| Last healthy | 4812 |\n| Downtime | none |\n\nButtons: Cancel, Roll back',
+    log: '```\napi · rollback to 4812 · complete\n' + LOGLINES.join('\n') + '\n```',
+    compare: '**Compare builds**\n\n| | 4815 | 4812 |\n|---|---|---|\n' + COMPARE.slice(1).map(function (r) { return '| ' + r.join(' | ') + ' |'; }).join('\n')
+  };
+  var REC = {
+    slides: {
+      help: 'A talk with slides, a webcam in the corner and a pointer that never quite sits still. The case the skill is built for.',
+      draw: drawSlides, mask: [],
+      segs: [
+        { id: 'chart', from: 0, to: 56, name: 'the bar chart', md: MD.chart, est: true },
+        { id: 'headline', from: 56, to: 62, name: 'the headline slide', md: MD.headline },
+        { id: 'code', from: 62, to: 96, name: 'the config slide', md: MD.code },
+        { id: 'table', from: 96, to: 120, name: 'the results table', md: MD.table }],
+      cues: [
+        { t: 2, text: 'Cold builds had crept past three minutes, so we measured where the time goes.' },
+        { t: 14, text: 'As you can see here, one stage dwarfs everything else.', refs: [['here', 'chart'], ['one stage', 'chart']] },
+        { t: 33, text: 'The other three barely register next to it.', refs: [['The other three', 'chart']] },
+        { t: 56, text: 'And after the change, a cold build comes down to this.', refs: [['this', 'headline']] },
+        { t: 62, text: 'The whole fix is these few lines.', refs: [['these few lines', 'code']] },
+        { t: 78, text: 'The key only changes when this file does, so most builds reuse the cache.', refs: [['this file', 'code']] },
+        { t: 96, text: 'And it holds on all three services, not just the one we tuned.' },
+        { t: 107, text: 'Look at the last column.', refs: [['the last column', 'table']] }]
+    },
+    app: {
+      help: 'A release dashboard. The title-bar clock, a status ticker and the taskbar change on every sample while the screen that matters stays put.',
+      draw: drawApp, mask: [[0, 0, 1, 0.12], [0, 0.92, 1, 1]],
+      segs: [
+        { id: 'board', from: 0, to: 40, name: 'the services board', md: MD.board },
+        { id: 'dialog', from: 40, to: 46, name: 'the roll-back dialog', md: MD.dialog },
+        { id: 'log', from: 46, to: 88, name: 'the deploy log', md: MD.log },
+        { id: 'compare', from: 88, to: 120, name: 'the build comparison', md: MD.compare }],
+      cues: [
+        { t: 2, text: 'This is the board we watch during a release.' },
+        { t: 12, text: 'Everything green is fine. The one to look at is this row.', refs: [['this row', 'board']] },
+        { t: 41, text: 'So I roll it back. You get this prompt, and the build you want is the one it calls last healthy.', refs: [['this prompt', 'dialog'], ['the one it calls last healthy', 'dialog']] },
+        { t: 47, text: 'Now watch the log. This line is the one that tells you it took.', refs: [['This line', 'log']] },
+        { t: 70, text: 'Twenty-one seconds, no downtime.' },
+        { t: 89, text: 'Afterwards, compare these two columns before you close the incident.', refs: [['these two columns', 'compare']] }]
+    },
+    head: {
+      help: 'A face and a voice. The duplicate check keeps one frame, and there is nothing on it to extract.',
+      draw: drawHead, mask: [],
+      segs: [{ id: 'face', from: 0, to: 120, name: 'the speaker', md: null }],
+      cues: [
+        { t: 2, text: 'Quick update from the platform team.' },
+        { t: 9, text: 'Cold builds are back under a minute after the cache change.' },
+        { t: 31, text: 'Nothing changes for anyone who builds locally.' },
+        { t: 62, text: 'If your pipeline pins its own cache key, drop the pin.' },
+        { t: 100, text: 'That is all for this week.' }]
+    }
+  };
+  function segAt(rec, t) { var s = rec.segs[0]; for (var i = 0; i < rec.segs.length; i++) if (t >= rec.segs[i].from) s = rec.segs[i]; return s; }
+  function drawFrame(g, W, H, rec, t) { g.save(); g.setTransform(W / FW, 0, 0, H / FH, 0, 0); rec.draw(g, t, segAt(rec, t).id); g.restore(); }
+
+  /* ================= 2. the duplicate check: a port of scripts/extract_frames.py ================= */
+  // PIL convert("L"): ITU-R 601-2 luma, integer arithmetic.
+  function toGray(data, n) {
+    var out = new Uint8Array(n);
+    for (var i = 0, p = 0; i < n; i++, p += 4) out[i] = (data[p] * 19595 + data[p + 1] * 38470 + data[p + 2] * 7471 + 32768) >> 16;
+    return out;
+  }
+  // SKILL.md masked(): paste black over each region, given as fractions of width and height.
+  function applyMask(gray, w, h, mask) {
+    if (!mask || !mask.length) return gray;
+    var out = new Uint8Array(gray);
+    mask.forEach(function (m) {
+      var x0 = clamp(Math.trunc(m[0] * w), 0, w), y0 = clamp(Math.trunc(m[1] * h), 0, h), x1 = clamp(Math.trunc(m[2] * w), 0, w), y1 = clamp(Math.trunc(m[3] * h), 0, h);
+      for (var y = y0; y < y1; y++) out.fill(0, y * w + x0, y * w + x1);
+    });
+    return out;
+  }
+  // PIL resize(..., LANCZOS): separable, horizontal pass first, 8-bit rounding after each pass.
+  function lanczos(x) { if (x < -3 || x >= 3) return 0; if (x === 0) return 1; var a = x * Math.PI; return (Math.sin(a) / a) * (Math.sin(a / 3) / (a / 3)); }
+  var coeffCache = {};
+  function coeffs(inS, outS) {
+    var key = inS + '>' + outS; if (coeffCache[key]) return coeffCache[key];
+    var scale = inS / outS, fs = Math.max(1, scale), support = 3 * fs, ss = 1 / fs, out = [];
+    for (var xx = 0; xx < outS; xx++) {
+      var center = (xx + 0.5) * scale, xmin = Math.max(0, Math.trunc(center - support + 0.5));
+      var len = Math.min(inS, Math.trunc(center + support + 0.5)) - xmin, k = new Float64Array(len), ww = 0, x;
+      for (x = 0; x < len; x++) { k[x] = lanczos((x + xmin - center + 0.5) * ss); ww += k[x]; }
+      if (ww !== 0) for (x = 0; x < len; x++) k[x] /= ww;
+      out.push({ min: xmin, k: k });
+    }
+    return (coeffCache[key] = out);
+  }
+  function resize9x8(gray, w, h) {
+    var cx = coeffs(w, 9), cy = coeffs(h, 8), tmp = new Uint8Array(9 * h), out = new Uint8Array(72), x, y, i, s, c;
+    for (y = 0; y < h; y++) for (x = 0; x < 9; x++) {
+      c = cx[x]; s = 0.5; for (i = 0; i < c.k.length; i++) s += gray[y * w + c.min + i] * c.k[i];
+      tmp[y * 9 + x] = s < 0 ? 0 : s > 255 ? 255 : Math.floor(s);
+    }
+    for (y = 0; y < 8; y++) { c = cy[y]; for (x = 0; x < 9; x++) {
+      s = 0.5; for (i = 0; i < c.k.length; i++) s += tmp[(c.min + i) * 9 + x] * c.k[i];
+      out[y * 9 + x] = s < 0 ? 0 : s > 255 ? 255 : Math.floor(s);
+    } }
+    return out;
+  }
+  // dhash(): one bit per pixel pair, set when the left pixel is brighter than its right neighbour.
+  function dhash(px) { var b = new Uint8Array(64); for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) b[r * 8 + c] = px[r * 9 + c] > px[r * 9 + c + 1] ? 1 : 0; return b; }
+  function hamming(a, b) { var n = 0; for (var i = 0; i < 64; i++) if (a[i] !== b[i]) n++; return n; }
+  // main(): keep a frame unless fewer than `threshold` bits differ from the last KEPT frame.
+  function dedupe(samples, threshold) {
+    var last = -1, out = [];
+    for (var i = 0; i < samples.length; i++) {
+      var d = last < 0 ? null : hamming(samples[i].bits, samples[last].bits), kept = last < 0 || d >= threshold;
+      out.push({ kept: kept, dist: d, ref: kept ? last : last });
+      if (kept) last = i;
+    }
+    return out;
+  }
+
+  /* ================= 3. state and model ================= */
+  var st = { src: 'slides', interval: 5, threshold: 6, mask: false, view: 'sheet', sel: 0, fileMode: 'both', raw: false, tour: !reduced, userMasks: [] };
+  var M = { samples: [], res: [], kept: 0, truth: null, own: null, busy: false };
+  var hashCv = document.createElement('canvas'); hashCv.width = FW; hashCv.height = FH;
+  var hashG = hashCv.getContext('2d', { willReadFrequently: true });
+  var gl3 = false, userActed = false, dealTimer = 0;
+
+  function isOwn() { return st.src === 'own'; }
+  function activeMask() { return isOwn() ? st.userMasks : (st.mask ? REC[st.src].mask : []); }
+  function buildDemoSamples() {
+    var rec = REC[st.src], n = Math.round(SLICE / st.interval), tw = n <= 24 ? 512 : 256, th = tw / 2, out = [];
+    for (var i = 0; i < n; i++) {
+      // ffmpeg's fps filter emits, for slot i, the last frame before the middle of that slot; the script labels it i * interval.
+      var at = (i + 0.5) * st.interval - 0.1, cv = document.createElement('canvas');
+      cv.width = tw; cv.height = th;
+      drawFrame(cv.getContext('2d'), tw, th, rec, at);
+      drawFrame(hashG, FW, FH, rec, at);
+      out.push({ i: i, t: i * st.interval, at: at, seg: segAt(rec, at), cv: cv, gray: toGray(hashG.getImageData(0, 0, FW, FH).data, FW * FH), gw: FW, gh: FH });
+    }
+    M.samples = out;
+  }
+  function rehash() {
+    var mask = activeMask();
+    M.samples.forEach(function (s) { s.px = resize9x8(applyMask(s.gray, s.gw, s.gh, mask), s.gw, s.gh); s.bits = dhash(s.px); });
+  }
+  function rededupe() {
+    M.res = dedupe(M.samples, st.threshold);
+    var kept = 0, seen = {}, sampled = {}, keptBy = {};
+    M.samples.forEach(function (s, i) {
+      var r = M.res[i]; r.repeat = false;
+      if (s.seg) sampled[s.seg.id] = true;
+      if (!r.kept) return;
+      r.keptIndex = kept++;
+      if (s.seg) { r.repeat = !!seen[s.seg.id]; seen[s.seg.id] = true; keptBy[s.seg.id] = (keptBy[s.seg.id] || 0) + 1; }
+    });
+    M.kept = kept;
+    if (isOwn()) { M.truth = null; return; }
+    var segs = REC[st.src].segs;
+    M.truth = {
+      total: segs.length,
+      missed: segs.filter(function (g) { return !sampled[g.id]; }),
+      merged: segs.filter(function (g) { return sampled[g.id] && !keptBy[g.id]; }),
+      distinct: Object.keys(keptBy).length,
+      redundant: kept - Object.keys(keptBy).length
+    };
+  }
+  function span() { return isOwn() && M.own ? M.own.covered : SLICE; }
+
+  /* ================= 4. the 3D stage ================= */
+  var Stage = (function () {
+    var T, renderer, scene, camera, deck, cards = [], bars, threads, playhead, ruler;
+    var canvas = $('gl'), stageEl = $('stage'), marksEl = $('marks'), tagsEl = $('tags');
+    var CW = 2.08, CH = 1.17, L = 9, X0 = -4.5, THETA = -0.9, BASE = 0.64, ZB = 1.5, NB = 120;
+    var yaw = 0.3, yawT = 0.3, pitch = 0.36, userYaw = false, running = false, last = 0, visible = true, onscreen = true;
+    var geoCard, geoPlate, matSide, matBack, matKept, matSel, maxAniso = 1;
+    var dragging = false, activeId = null, px = 0, py = 0, moved = 0, hoverI = -1, lostCtx = false;
+    var marks = [], tags = [], phX = 0, phT = 0, fitKey = '', vec, ray, ptr, dummy, sizeW = 0, sizeH = 0;
+    var onPick = function () {};
+
+    function xAt(frac) { return X0 + frac * L; }
+    function defaultYaw() { var a = sizeW / Math.max(1, sizeH); return 0.34 + clamp((1.8 - a) / 0.8, 0, 1) * 0.72; }
+    function init(THREE, pick) {
+      T = THREE; onPick = pick;
+      renderer = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setClearColor(0x000000, 0);
+      maxAniso = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+      scene = new T.Scene(); camera = new T.PerspectiveCamera(26, 1, 0.1, 120);
+      deck = new T.Group(); scene.add(deck);
+      vec = new T.Vector3(); ray = new T.Raycaster(); ptr = new T.Vector2(); dummy = new T.Object3D();
+      geoCard = new T.BoxGeometry(CW, CH, 0.012); geoPlate = new T.PlaneGeometry(CW + 0.09, CH + 0.09);
+      matSide = new T.MeshBasicMaterial({ color: 0xa9b2bf }); matBack = new T.MeshBasicMaterial({ color: 0x232830 });
+      matKept = new T.MeshBasicMaterial({ color: 0x3fd0e6, side: T.DoubleSide }); matSel = new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide });
+
+      // time ruler between the two lanes
+      var rp = [X0, 0, 0.66, X0 + L, 0, 0.66], s;
+      for (s = 0; s <= 12; s++) { var x = xAt(s / 12), len = s % 3 === 0 ? 0.16 : 0.08; rp.push(x, 0, 0.66 - len, x, 0, 0.66 + len); }
+      var rg = new T.BufferGeometry(); rg.setAttribute('position', new T.Float32BufferAttribute(rp, 3));
+      ruler = new T.LineSegments(rg, new T.LineBasicMaterial({ color: 0x4a5361 })); deck.add(ruler);
+      // speech lane
+      bars = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial({ color: 0xffffff }), NB);
+      bars.instanceMatrix.setUsage(T.DynamicDrawUsage); bars.setColorAt(0, new T.Color(0x39404b)); bars.visible = false; deck.add(bars);
+      // threads from each kept frame down to the shared time axis
+      var tg = new T.BufferGeometry(); tg.setAttribute('position', new T.BufferAttribute(new Float32Array(260 * 6), 3)); tg.setDrawRange(0, 0);
+      threads = new T.LineSegments(tg, new T.LineBasicMaterial({ color: 0x2b8fa0 })); threads.frustumCulled = false; deck.add(threads);
+      playhead = new T.Mesh(new T.BoxGeometry(0.022, 0.008, ZB + 0.75), new T.MeshBasicMaterial({ color: 0xf6c51b }));
+      playhead.position.set(X0, 0.004, (ZB - 0.45) / 2); deck.add(playhead);
+
+      ['00:00', '', '', '', ''].forEach(function () { var m = el('span'); marksEl.appendChild(m); marks.push(m); });
+
+      canvas.addEventListener('pointerdown', function (e) {
+        if (activeId !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+        activeId = e.pointerId; dragging = true; moved = 0; px = e.clientX; py = e.clientY;
+        try { canvas.setPointerCapture(e.pointerId); } catch (x) {}
+      });
+      canvas.addEventListener('pointermove', function (e) {
+        if (e.pointerId !== activeId) { if (activeId === null && e.pointerType === 'mouse') hover(e); return; }
+        var dx = e.clientX - px, dy = e.clientY - py; px = e.clientX; py = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
+        if (moved > 6) { canvas.classList.add('dragging'); userYaw = true; yawT = clamp(yawT + dx * 0.006, -0.18, 1.3); if (e.pointerType === 'mouse') pitch = clamp(pitch + dy * 0.004, 0.14, 0.75); }
+        request();
+      });
+      var end = function (e) {
+        if (e.pointerId !== activeId) return;
+        activeId = null; dragging = false; canvas.classList.remove('dragging');
+        if (e.type === 'pointerup' && moved <= 6) { var i = pickAt(e); if (i >= 0) onPick(i); }
+      };
+      canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+      canvas.addEventListener('pointerleave', function () { if (hoverI !== -1) { hoverI = -1; canvas.classList.remove('point'); } });
+      canvas.addEventListener('keydown', function (e) {
+        var d = e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : 0;
+        if (e.key === 'Home') { userYaw = false; yawT = defaultYaw(); request(); e.preventDefault(); return; }
+        if (!d) return;
+        userYaw = true; yawT = clamp(yawT + d * 0.12, -0.18, 1.3); request(); e.preventDefault();
+      });
+      canvas.addEventListener('webglcontextlost', function (e) { e.preventDefault(); lostCtx = true; onPick(-2); });
+      canvas.addEventListener('webglcontextrestored', function () { lostCtx = false; cards.forEach(function (c) { c.tex.needsUpdate = true; }); onPick(-3); request(); });
+      if (window.ResizeObserver) new ResizeObserver(resize).observe(stageEl); else window.addEventListener('resize', resize);
+      if (window.IntersectionObserver) new IntersectionObserver(function (en) { var was = onscreen; onscreen = en[0].isIntersecting; if (onscreen) { if (!was) snap(); request(); } }).observe(stageEl);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) { snap(); request(); } });
+      resize(); yaw = yawT = defaultYaw();
+    }
+    function resize() {
+      var w = stageEl.clientWidth, h = stageEl.clientHeight; if (!w || !h || !renderer) return;
+      sizeW = w; sizeH = h; renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); renderer.setSize(w, h, false);
+      camera.aspect = w / h; fitKey = '';
+      if (!userYaw) yawT = defaultYaw();
+      draw();
+    }
+    function clear() {
+      cards.forEach(function (c) { deck.remove(c.g); c.tex.dispose(); c.front.dispose(); });
+      cards = [];
+    }
+    function setSamples(samples, deal) {
+      clear();
+      var n = samples.length;
+      samples.forEach(function (s, i) {
+        var tex = new T.CanvasTexture(s.cv); tex.anisotropy = maxAniso;
+        var front = new T.MeshBasicMaterial({ map: tex });
+        var mesh = new T.Mesh(geoCard, [matSide, matSide, matSide, matSide, front, matBack]); mesh.userData.i = i;
+        var plate = new T.Mesh(geoPlate, matKept); plate.position.z = -0.011; plate.visible = false;
+        var g = new T.Group(); g.add(plate); g.add(mesh); g.rotation.y = THETA; deck.add(g);
+        var x = xAt((i + 0.5) / n), c = { g: g, mesh: mesh, plate: plate, front: front, tex: tex, x: x, y: BASE, s: 1, d: 1, tx: x, ty: BASE, ts: 1, td: 1, delay: 0 };
+        if (deal && !reduced) { c.y = BASE - 0.55; c.s = 0.72; c.d = 0; c.delay = 0.05 + i * (0.55 / n); }
+        cards.push(c);
+      });
+    }
+    function addCard(s, n) { // own recording: frames arrive one at a time
+      var tex = new T.CanvasTexture(s.cv); tex.anisotropy = maxAniso;
+      var front = new T.MeshBasicMaterial({ map: tex });
+      var mesh = new T.Mesh(geoCard, [matSide, matSide, matSide, matSide, front, matBack]); mesh.userData.i = cards.length;
+      var plate = new T.Mesh(geoPlate, matKept); plate.position.z = -0.011; plate.visible = false;
+      var g = new T.Group(); g.add(plate); g.add(mesh); g.rotation.y = THETA; deck.add(g);
+      var x = xAt((cards.length + 0.5) / n);
+      cards.push({ g: g, mesh: mesh, plate: plate, front: front, tex: tex, x: x, y: BASE - 0.4, s: 0.8, d: 0, tx: x, ty: BASE, ts: 1, td: 1, delay: 0 });
+    }
+    function layout(res, view, sel, total) {
+      var n = total || cards.length, tp = threads.geometry.attributes.position, tn = 0, keptN = 0, i;
+      var thin = clamp((L / Math.max(1, n)) * 0.16 * 0.78 / 0.012 * 0.6, 0.12, 1);
+      tags.forEach(function (b) { b.remove(); }); tags = [];
+      for (i = 0; i < cards.length; i++) if (res[i] && res[i].kept) keptN++;
+      for (i = 0; i < cards.length; i++) {
+        var c = cards[i], r = res[i]; if (!r) continue;
+        var xi = xAt((i + 0.5) / n);
+        c.mesh.scale.z = view === 'piles' ? thin : 1;
+        if (view === 'piles' && !r.kept) { var xk = xAt((r.ref + 0.5) / n); c.tx = xk + (xi - xk) * 0.16; c.ty = BASE; c.ts = 0.94; c.td = 0.42; }
+        else if (view === 'piles') { c.tx = xi; c.ty = BASE + 0.4; c.ts = 1.16; c.td = 1; }
+        else { c.tx = xi; c.ty = BASE + (r.kept ? 0.12 : 0); c.ts = 1; c.td = r.kept ? 1 : 0.6; }
+        if (i === sel) { c.ty += 0.13; c.td = Math.max(c.td, 0.92); }
+        c.plate.visible = r.kept || i === sel; c.plate.material = i === sel ? matSel : matKept;
+        if (r.kept && tn < 260) { tp.setXYZ(tn * 2, xi, 0.003, -0.05); tp.setXYZ(tn * 2 + 1, xi, 0.003, ZB + 0.25); tn++; }
+        if ((r.kept && keptN <= 9) || i === sel) addTag(i, i === sel);
+      }
+      tp.needsUpdate = true; threads.geometry.setDrawRange(0, tn * 2);
+      phT = xAt(((sel >= 0 ? sel : 0) + 0.5) / n);
+      request();
+    }
+    function addTag(i, sel) {
+      var b = el('button', sel ? 'sel' : null, mmss(M.samples[i].t)); b.type = 'button';
+      b.setAttribute('aria-label', (M.res[i].kept ? 'Kept frame at ' : 'Frame at ') + mmss(M.samples[i].t) + (sel ? ', selected' : ''));
+      b.addEventListener('click', function () { onPick(i); });
+      b._i = i; tagsEl.appendChild(b); tags.push(b);
+    }
+    function setSpeech(cues, total, selAt) {
+      var amp = new Float32Array(NB), on = new Uint8Array(NB), i, col = new T.Color();
+      cues.forEach(function (c) {
+        for (i = 0; i < NB; i++) { var t = (i + 0.5) / NB * total; if (t >= c.t && t < c.t + c.d) { amp[i] = 0.25 + 0.75 * Math.abs(Math.sin(i * 1.7) * Math.sin(i * 0.37 + c.t)); on[i] = selAt >= c.t && selAt < c.next ? 2 : 1; } }
+      });
+      for (i = 0; i < NB; i++) {
+        var h = on[i] ? 0.08 + amp[i] * 0.62 : 0.02;
+        dummy.position.set(xAt((i + 0.5) / NB), h / 2, ZB); dummy.scale.set(L / NB * 0.55, h, 0.05); dummy.rotation.set(0, 0, 0); dummy.updateMatrix();
+        bars.setMatrixAt(i, dummy.matrix); col.set(on[i] === 2 ? 0xf6c51b : on[i] === 1 ? 0x8a7220 : 0x39404b); bars.setColorAt(i, col);
+      }
+      bars.instanceMatrix.needsUpdate = true; if (bars.instanceColor) bars.instanceColor.needsUpdate = true;
+      bars.visible = true; request();
+    }
+    function setMarks(total) {
+      for (var i = 0; i < 5; i++) marks[i].textContent = mmss(total * i / 4);
+    }
+    function fit() {
+      var key = sizeW + 'x' + sizeH + '|' + yaw.toFixed(4) + '|' + pitch.toFixed(4); if (key === fitKey) return; fitKey = key;
+      var padTop = sizeW < 520 ? 78 : 52, padBot = 96, lo = 3, hi = 70, it, ty = 0.75, pass;
+      var top = 1 - 2 * padTop / sizeH, bot = -1 + 2 * padBot / sizeH;
+      function place(R) { camera.position.set(0, ty + R * Math.sin(pitch), R * Math.cos(pitch)); camera.lookAt(0, ty, 0); camera.updateMatrixWorld(); camera.updateProjectionMatrix(); }
+      function bounds() {
+        var b = { x: 0, y0: 9, y1: -9 }, xs = [X0 - 0.75, X0 + L + 0.75], ys = [0, 2.5], zs = [-0.9, ZB + 0.5], a, c, d;
+        for (a = 0; a < 2; a++) for (c = 0; c < 2; c++) for (d = 0; d < 2; d++) {
+          vec.set(xs[a], ys[c], zs[d]).applyMatrix4(deck.matrixWorld).project(camera);
+          b.x = Math.max(b.x, Math.abs(vec.x)); b.y0 = Math.min(b.y0, vec.y); b.y1 = Math.max(b.y1, vec.y);
+        }
+        return b;
+      }
+      deck.rotation.y = yaw; deck.updateMatrixWorld();
+      for (pass = 0; pass < 3; pass++) {
+        lo = 3; hi = 70;
+        for (it = 0; it < 16; it++) { var R = (lo + hi) / 2; place(R); var b = bounds(); if (b.x <= 0.95 && (b.y1 - b.y0) <= (top - bot)) hi = R; else lo = R; }
+        place(hi); var bb = bounds(), want = (top + bot) / 2, have = (bb.y1 + bb.y0) / 2;
+        ty += (have - want) * hi * Math.tan(camera.fov * Math.PI / 360);
+      }
+      place(hi);
+      canvas.setAttribute('aria-valuenow', String(Math.round(yaw * 180 / Math.PI)));
+    }
+    function project(x, y, z, node, ax, ay, lift) {
+      vec.set(x, y, z).applyMatrix4(deck.matrixWorld).project(camera);
+      var ok = vec.z < 1 && Math.abs(vec.x) < 1.05 && Math.abs(vec.y) < 1.05, sx = (vec.x * 0.5 + 0.5) * sizeW, sy = (-vec.y * 0.5 + 0.5) * sizeH - (lift || 0);
+      node.style.visibility = ok ? '' : 'hidden';
+      if (ok) node.style.transform = 'translate(' + sx.toFixed(1) + 'px,' + sy.toFixed(1) + 'px) translate(' + ax + '%,' + ay + '%)';
+      return sx;
+    }
+    function draw() {
+      if (!renderer || lostCtx || !sizeW) return;
+      fit(); renderer.render(scene, camera);
+      for (var i = 0; i < 5; i++) project(xAt(i / 4), 0, ZB + 0.22, marks[i], -50, 10);
+      var prevX = -999, lift = 0;
+      tags.forEach(function (b) { // tags that would sit on top of each other step upward
+        var c = cards[b._i]; if (!c) return;
+        var x = project(c.x, c.y + CH * c.s / 2 + 0.07, 0, b, -50, -100, 0);
+        lift = Math.abs(x - prevX) < 50 ? lift + 24 : 0;
+        if (lift && sizeW < 520 && !b.classList.contains('sel')) { b.style.visibility = 'hidden'; lift = 0; return; } // no room on a phone
+        if (lift) project(c.x, c.y + CH * c.s / 2 + 0.07, 0, b, -50, -100, lift);
+        prevX = x;
+      });
+    }
+    function snap() { // after time off screen, show the settled state rather than a half-finished move
+      cards.forEach(function (c) { c.delay = 0; c.x = c.tx; c.y = c.ty; c.s = c.ts; c.d = c.td; c.g.position.set(c.x, c.y, 0); c.g.scale.set(c.s, c.s, 1); c.front.color.setScalar(c.d); });
+      yaw = yawT; phX = phT; if (playhead) playhead.position.x = phX;
+    }
+    function tick(now) {
+      running = false;
+      if (document.hidden || !onscreen || lostCtx) return;
+      var dt = clamp((now - last) / 1000, 0.001, 0.05); last = now;
+      var k = reduced ? 1 : 1 - Math.exp(-dt * 8.5), moving = false, i, c;
+      for (i = 0; i < cards.length; i++) {
+        c = cards[i];
+        if (c.delay > 0 && !reduced) { c.delay -= dt; moving = true; }
+        else {
+          c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k; c.s += (c.ts - c.s) * k; c.d += (c.td - c.d) * k;
+          if (Math.abs(c.tx - c.x) + Math.abs(c.ty - c.y) + Math.abs(c.ts - c.s) + Math.abs(c.td - c.d) > 0.002) moving = true;
+        }
+        c.g.position.set(c.x, c.y, 0); c.g.scale.set(c.s, c.s, 1); c.front.color.setScalar(c.d);
+      }
+      yaw += (yawT - yaw) * (reduced ? 1 : 1 - Math.exp(-dt * 12)); if (Math.abs(yawT - yaw) > 0.0004) moving = true; else yaw = yawT;
+      phX += (phT - phX) * k; if (Math.abs(phT - phX) > 0.002) moving = true;
+      playhead.position.x = phX;
+      draw();
+      if (moving || dragging) request();
+    }
+    function request() { if (running || !renderer) return; running = true; requestAnimationFrame(function (now) { if (!last || now - last > 200) last = now - 16; tick(now); }); }
+    function pickAt(e) {
+      var r = canvas.getBoundingClientRect(); ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ptr, camera);
+      var hit = ray.intersectObjects(cards.map(function (c) { return c.mesh; }), false);
+      return hit.length ? hit[0].object.userData.i : -1;
+    }
+    function hover(e) { var i = pickAt(e); if (i !== hoverI) { hoverI = i; canvas.classList.toggle('point', i >= 0); } }
+    return { init: init, setSamples: setSamples, addCard: addCard, clear: clear, layout: layout, setSpeech: setSpeech, setMarks: setMarks, resize: resize, request: request,
+             count: function () { return cards.length; }, dispose: function () { clear(); } };
+  })();
+
+  /* ================= 5. views that do not need WebGL ================= */
+  var cells = [];
+  function renderSheet() {
+    var box = $('sheet'); box.textContent = ''; cells = [];
+    M.samples.forEach(function (s, i) {
+      var b = el('button', 'cell'); b.type = 'button';
+      var c = document.createElement('canvas'); c.width = 128; c.height = 72; c.getContext('2d').drawImage(s.cv, 0, 0, 128, 72);
+      b.appendChild(c); b.appendChild(el('span', null, mmss(s.t)));
+      b.addEventListener('click', function () { select(i, true); });
+      box.appendChild(b); cells.push(b);
+    });
+    markSheet();
+  }
+  function markSheet() {
+    cells.forEach(function (b, i) {
+      var r = M.res[i]; if (!r) return;
+      b.className = 'cell' + (r.kept ? ' kept' : '') + (i === st.sel ? ' sel' : '');
+      b.setAttribute('aria-pressed', i === st.sel ? 'true' : 'false');
+      b.setAttribute('aria-label', 'Frame at ' + mmss(M.samples[i].t) + (r.kept ? ', kept' : ', duplicate of ' + mmss(M.samples[r.ref].t)));
+    });
+  }
+  function applyView() {
+    var sheet = st.view === 'sheet' || !gl3;
+    $('sheet').hidden = !sheet; $('gl').hidden = sheet; $('marks').hidden = sheet; $('tags').hidden = sheet;
+    $('hint').textContent = sheet ? 'Every sampled frame. Outlined ones were kept.' : 'Drag to turn. Tap a frame to inspect it.';
+    $('caption').hidden = sheet;
+    if (sheet) { if (cells.length !== M.samples.length) renderSheet(); else markSheet(); }
+    else { layoutStage(); Stage.resize(); }
+  }
+  function layoutStage() { if (gl3 && st.view !== 'sheet') Stage.layout(M.res, st.view, st.sel, isOwn() && M.own ? M.own.n : M.samples.length); }
+
+  function renderReadout() {
+    var n = M.samples.length, box = $('readout'); box.textContent = '';
+    var add = function (t, cls) { var s = el(cls === 'b' ? 'b' : 'span', cls === 'k' ? 'k' : null, t); box.appendChild(s); };
+    add(mmss(span()) + (isOwn() ? ' of your file' : ' example') + ' · every ' + st.interval + ' s · ');
+    add(n + ' sampled', 'b'); add(' → '); add(M.kept + ' kept', 'k');
+  }
+  function cueAt(t) { var cues = isOwn() ? [] : REC[st.src].cues, c = null; for (var i = 0; i < cues.length; i++) if (cues[i].t <= t + 0.6) c = cues[i]; return c || cues[0] || null; }
+  function withRefs(node, cue, cls, resolved) {
+    var text = cue.text, refs = (cue.refs || []).map(function (r) { return { p: r[0], seg: r[1], at: text.indexOf(r[0]) }; }).filter(function (r) { return r.at >= 0; }).sort(function (a, b) { return a.at - b.at; }), pos = 0, dangling = 0;
+    refs.forEach(function (r) {
+      if (r.at < pos) return;
+      node.appendChild(document.createTextNode(text.slice(pos, r.at)));
+      var ok = resolved && resolved[r.seg], sp = el('span', ok ? 'ok-ref' : cls, r.p);
+      if (!ok) dangling++;
+      node.appendChild(sp); pos = r.at + r.p.length;
+    });
+    node.appendChild(document.createTextNode(text.slice(pos)));
+    return dangling;
+  }
+  function renderCaption() {
+    var box = $('caption'), s = M.samples[st.sel]; box.textContent = ''; box.className = 'caption';
+    if (!s) return;
+    if (isOwn()) { box.className = 'caption quiet'; box.textContent = 'No transcript in this preview. Whisper adds the speech when you run the scripts.'; return; }
+    var cue = cueAt(s.at); if (!cue) return;
+    box.appendChild(el('time', null, mmss(cue.t))); withRefs(box, cue, 'ref', null);
+  }
+  function renderSpeech() {
+    if (!gl3) return;
+    var s = M.samples[st.sel], cues = isOwn() ? [] : REC[st.src].cues, total = span();
+    var list = cues.map(function (c, i) { var next = cues[i + 1] ? cues[i + 1].t : total; return { t: c.t, d: Math.min(next - c.t - 0.6, c.text.split(' ').length * 0.36 + 0.6), next: next }; });
+    var active = s && !isOwn() ? cueAt(s.at) : null;
+    Stage.setSpeech(list, total, active ? active.t : -1); Stage.setMarks(total);
+  }
+
+  /* ---------- verdict ---------- */
+  function names(list) { return list.map(function (g) { return g.name; }).join(' and '); }
+  function renderVerdict() {
+    var n = M.samples.length, t = M.truth, box = $('vMsg'), lines = [];
+    $('vKept').textContent = String(M.kept);
+    $('vOf').textContent = 'of ' + plural(n, 'sampled frame', 'sampled frames') + ' kept';
+    if (isOwn()) {
+      var o = M.own;
+      if (M.busy) lines.push(['note', 'Sampling your recording. The count settles when it finishes.']);
+      else {
+        var whole = Math.max(M.kept, Math.round(M.kept * o.dur / o.covered));
+        lines.push(['note', o.covered + 1 < o.dur ? 'That is the first ' + mmss(o.covered) + ' of ' + mmss(o.dur) + '. At this pace the whole file keeps about ' + whole + ' frames.' : 'That is the whole file, ' + mmss(o.dur) + ' long.']);
+        lines.push(['note', 'Look through the kept frames below. Many showing the same screen: raise the threshold, or mask what moves. A screen you know is missing: lower the interval.']);
+      }
+    } else if (st.src === 'head') {
+      lines.push(['note', 'A face, held for two minutes. The vision step returns NONE for it and the frame is dropped, so the notes come from the transcript alone. For a recording like this, skip the frame steps.']);
+      if (M.kept > 1) lines.push(['note', 'The ' + M.kept + ' kept frames differ only by a caption card coming and going or the speaker moving. Each one still returns NONE.']);
+    } else {
+      if (t.missed.length) lines.push(['warn', 'Never sampled: ' + names(t.missed) + '. It was on screen for ' + (t.missed[0].to - t.missed[0].from) + ' s and fell between two samples. Lower the interval to 2 or 5 s.']);
+      if (t.merged.length) lines.push(['warn', 'Dropped as a duplicate: ' + names(t.merged) + '. The threshold is high enough that a different screen counts as the same one.']);
+      if (t.redundant > 0) lines.push(['warn', st.src === 'app' && !st.mask
+        ? M.kept + ' kept, but they show only ' + plural(t.distinct, 'distinct screen', 'distinct screens') + '. The clock, ticker and taskbar change on every sample. Mask them.'
+        : M.kept + ' kept, but they show only ' + plural(t.distinct, 'distinct screen', 'distinct screens') + '. ' + (st.src === 'app' ? 'The cursor is' : 'The webcam corner and the pointer are') + ' firing the hash. Raise the threshold.']);
+      if (!lines.length) lines.push(['ok', 'One frame per screen: all ' + t.total + ' screens in the recording, each kept once. ' + plural(n - M.kept, 'duplicate', 'duplicates') + ' dropped.']);
+    }
+    box.textContent = '';
+    lines.forEach(function (l) { box.appendChild(el('p', l[0], l[1])); });
+    var calls = st.src === 'head' ? M.kept : M.kept;
+    $('vCost').textContent = 'describe_frames.py makes one vision call per kept frame: ' + plural(calls, 'call', 'calls') + ' for ' + (isOwn() ? 'this part of your file' : 'these two minutes') + '. That step is nearly all of the cost.';
+  }
+
+  /* ---------- inspector ---------- */
+  function renderTicks() {
+    var box = $('ticks'), n = M.samples.length; box.textContent = '';
+    for (var i = 0; i < n; i++) box.appendChild(el('i', (M.res[i] && M.res[i].kept ? 'kept' : '') + (i === st.sel ? ' sel' : '')));
+    var sc = $('scrub'); sc.max = String(Math.max(0, n - 1)); sc.value = String(st.sel);
+  }
+  var sharpTimer = 0;
+  function renderInspector() {
+    var s = M.samples[st.sel], r = M.res[st.sel], cv = $('inFrame'), g = cv.getContext('2d'), i;
+    if (!s || !r) { $('inPos').textContent = ''; return; }
+    if (isOwn()) {
+      var hh = Math.round(640 * M.own.h / M.own.w); if (cv.height !== hh) cv.height = hh;
+      g.drawImage(s.cv, 0, 0, 640, cv.height);
+      clearTimeout(sharpTimer); if (!M.busy) sharpTimer = setTimeout(function () { sharpen(st.sel); }, 180);
+    } else { if (cv.height !== 360) cv.height = 360; drawFrame(g, 640, 360, REC[st.src], s.at); }
+    renderMaskLayer();
+    $('inPos').textContent = 'frame ' + (st.sel + 1) + ' of ' + M.samples.length;
+    $('inH').textContent = r.kept ? (r.dist === null ? 'Why ' + mmss(s.t) + ' was kept: it came first' : 'Why ' + mmss(s.t) + ' was kept') : 'Why ' + mmss(s.t) + ' was dropped';
+    $('inCap').textContent = 'Taken at ' + mmss(s.at) + ', labelled ' + hhmmss(s.t) + '. The script labels a frame with the start of its ' + st.interval + '-second window.' + (activeMask().length ? ' Masked regions are blacked out before hashing.' : '');
+    var tg = $('inThumb').getContext('2d'), im = tg.createImageData(9, 8);
+    for (i = 0; i < 72; i++) { im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = s.px[i]; im.data[i * 4 + 3] = 255; }
+    tg.putImageData(im, 0, 0);
+    var bits = $('inBits'), ref = r.ref >= 0 ? M.samples[r.ref] : null; bits.textContent = '';
+    for (i = 0; i < 64; i++) bits.appendChild(el('i', (s.bits[i] ? 'on' : '') + (ref && ref.bits[i] !== s.bits[i] ? ' diff' : '')));
+    var m = $('inMath'); m.textContent = '';
+    if (r.dist === null) { m.appendChild(el('span', 'pill kept', 'kept')); m.appendChild(document.createTextNode(' The first frame has nothing to be compared with.')); }
+    else {
+      m.appendChild(el('span', 'pill ' + (r.kept ? 'kept' : 'dup'), r.kept ? 'kept' : 'duplicate'));
+      m.appendChild(document.createTextNode(' ')); m.appendChild(el('b', null, r.dist + ' of 64'));
+      m.appendChild(document.createTextNode(' bits differ from the last kept frame, ' + mmss(ref.t) + '. ' + (r.kept ? r.dist + ' is not below ' + st.threshold + ', so this is a new screen.' : r.dist + ' is below ' + st.threshold + ', so it is dropped.')));
+    }
+    var v = $('inVision'); v.textContent = '';
+    if (isOwn()) {
+      v.appendChild(el('p', null, r.kept ? 'This frame would go to the vision model, which returns its tables, text or code as markdown, or NONE when there is nothing to extract.' : 'Dropped frames are never sent to the vision model.'));
+      v.appendChild(el('p', 'madeup', 'This page cannot run that step. It needs describe_frames.py and an API key.'));
+    } else if (!r.kept) v.appendChild(el('p', null, 'Nothing. A dropped frame is never sent to the vision model, which is the point: the screen it shows was already read at ' + mmss(ref.t) + '.'));
+    else if (!s.seg.md) {
+      var p = el('p'); p.appendChild(el('span', 'pill none', 'NONE')); p.appendChild(document.createTextNode(' A speaker, a webcam or a title card has nothing to extract. The frame is dropped, which keeps "a person is speaking" out of the notes.')); v.appendChild(p);
+    } else {
+      v.appendChild(mdRender(s.seg.md));
+      v.appendChild(el('p', 'madeup', s.seg.est
+        ? 'Written by hand for this example, not model output. The bars were drawn at 124, 41, 33 and 14; a model reading heights off pixels lands near those values, not on them, which is why the marker stays.'
+        : 'Written by hand for this example, not model output.'));
+    }
+    $('prev').disabled = st.sel <= 0; $('next').disabled = st.sel >= M.samples.length - 1;
+  }
+  function renderMaskLayer() {
+    var box = $('maskLayer'); box.textContent = '';
+    activeMask().forEach(function (m) {
+      var d = el('div', 'mk'); d.style.left = (m[0] * 100) + '%'; d.style.top = (m[1] * 100) + '%'; d.style.width = ((m[2] - m[0]) * 100) + '%'; d.style.height = ((m[3] - m[1]) * 100) + '%';
+      box.appendChild(d);
+    });
+  }
+
+  /* ---------- markdown ---------- */
+  function inline(node, text) {
+    text.split(/(\*\*[^*]+\*\*|`[^`]+`)/).forEach(function (part) {
+      if (/^\*\*/.test(part)) node.appendChild(el('strong', null, part.slice(2, -2)));
+      else if (/^`/.test(part)) node.appendChild(el('code', null, part.slice(1, -1)));
+      else if (part) node.appendChild(document.createTextNode(part));
+    });
+    return node;
+  }
+  function mdRender(md) {
+    var frag = el('div', 'md'), lines = md.split('\n'), i = 0, buf;
+    while (i < lines.length) {
+      var ln = lines[i];
+      if (/^```/.test(ln)) { buf = []; i++; while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]); i++; var pre = el('pre', null, buf.join('\n')); pre.tabIndex = 0; frag.appendChild(pre); }
+      else if (/^\|/.test(ln)) {
+        buf = []; while (i < lines.length && /^\|/.test(lines[i])) buf.push(lines[i++]);
+        var w = el('div', 'tw'), t = el('table'); w.tabIndex = 0;
+        buf.forEach(function (row, ri) {
+          if (ri === 1) return;
+          var tr = el('tr'); row.replace(/^\||\|$/g, '').split('|').forEach(function (c) { tr.appendChild(inline(el(ri === 0 ? 'th' : 'td'), c.trim())); }); t.appendChild(tr);
+        });
+        w.appendChild(t); frag.appendChild(w);
+      }
+      else if (/^>\s?/.test(ln)) { frag.appendChild(inline(el('blockquote'), ln)); i++; }
+      else if (/^#{1,6}\s/.test(ln)) { frag.appendChild(inline(el('h4'), ln.replace(/^#+\s/, ''))); i++; }
+      else if (!ln.trim()) i++;
+      else { buf = []; while (i < lines.length && lines[i].trim() && !/^(```|\||>|#{1,6}\s)/.test(lines[i])) buf.push(lines[i++]); frag.appendChild(inline(el('p'), buf.join(' '))); }
+    }
+    return frag;
+  }
+
+  /* ---------- the file: a port of scripts/build_notes.py ---------- */
+  function buildDoc() {
+    var rec = REC[st.src], frames = [], resolved = {};
+    M.samples.forEach(function (s, i) {
+      var r = M.res[i]; if (!r.kept || !s.seg.md) return; // NONE frames never reach frame_content.json
+      frames.push({ index: r.keptIndex, timestamp: s.t, path: 'work/frames/' + ('000' + r.keptIndex).slice(-4) + '.jpg', content: s.seg.md, sample: i, repeat: r.repeat });
+      resolved[s.seg.id] = true;
+    });
+    var events = frames.map(function (f) { return { t: f.timestamp, kind: 0, f: f }; }).concat(rec.cues.map(function (c) { return { t: c.t, kind: 1, c: c }; }));
+    events.sort(function (a, b) { return a.t - b.t || a.kind - b.kind; }); // frames sort before speech at the same second
+    var out = ['# Recording notes (raw merge)\n', '<!-- Transcript and on-screen content interleaved by timestamp. Not yet summarised. -->\n'], blocks = [], buf = [];
+    function flush() { if (!buf.length) return; out.push(buf.map(function (c) { return c.text; }).join(' ')); out.push(''); blocks.push({ kind: 'said', cues: buf.slice() }); buf = []; }
+    events.forEach(function (e) {
+      if (e.kind === 1) { buf.push(e.c); return; }
+      flush();
+      out.push('### On screen at ' + hhmmss(e.f.timestamp) + '\n'); out.push('![frame ' + e.f.index + '](' + e.f.path + ')\n'); out.push(e.f.content); out.push('');
+      blocks.push({ kind: 'shown', f: e.f });
+    });
+    flush();
+    return { raw: out.join('\n'), blocks: blocks, resolved: resolved, frames: frames };
+  }
+  function renderDoc() {
+    var body = $('docBody'), raw = $('docRaw'), cap = $('fileCap'); body.textContent = '';
+    $('fileSeg').hidden = isOwn(); $('fileAfter').hidden = isOwn();
+    if (isOwn()) {
+      $('fileH').textContent = 'The frames that were kept'; $('docName').textContent = 'work/frames/'; $('rawRow').hidden = true; raw.hidden = true; body.hidden = false;
+      cap.textContent = 'Each of these would cost one vision call. Count how many are really distinct before paying for that pass.';
+      var grid = el('div', 'keptgrid');
+      M.samples.forEach(function (s, i) {
+        if (!M.res[i] || !M.res[i].kept) return;
+        var b = el('button'); b.type = 'button'; var c = document.createElement('canvas'); c.width = 256; c.height = Math.round(256 * M.own.h / M.own.w);
+        c.getContext('2d').drawImage(s.cv, 0, 0, c.width, c.height); b.appendChild(c); b.appendChild(el('span', null, hhmmss(s.t)));
+        b.setAttribute('aria-label', 'Inspect kept frame at ' + mmss(s.t));
+        b.addEventListener('click', function () { select(i, true); $('inspect').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); });
+        grid.appendChild(b);
+      });
+      body.appendChild(grid);
+      if (!M.kept) body.appendChild(el('p', 'callout calm', 'Nothing sampled yet.'));
+      return;
+    }
+    $('fileH').textContent = 'What lands in the file'; $('rawRow').hidden = false;
+    var rec = REC[st.src], doc = buildDoc(), dangling = 0, total = 0;
+    rec.cues.forEach(function (c) { total += (c.refs || []).length; });
+    if (st.fileMode === 'speech') {
+      $('docName').textContent = 'recording.vtt, as text';
+      raw.textContent = rec.cues.map(function (c) { return c.text; }).join('\n');
+      var blk = el('div', 'blk said'); blk.appendChild(el('span', 'who', 'said')); var bd = el('div', 'body');
+      rec.cues.forEach(function (c) { var p = el('p'); p.appendChild(el('time', null, mmss(c.t))); dangling += withRefs(p, c, 'ref', null); bd.appendChild(p); });
+      blk.appendChild(bd); body.appendChild(blk);
+      body.appendChild(el('p', total ? 'callout' : 'callout calm', total
+        ? plural(total, 'phrase points', 'phrases point') + ' at something on screen. None of it is in this file, and nothing in the file says so.'
+        : 'Nothing was shown, so nothing is missing. For a talking head the transcript is the whole document.'));
+      cap.textContent = 'What Whisper alone gives you, or any converter that reads only the audio track. Underlined phrases point at the screen.';
+    } else {
+      $('docName').textContent = 'notes-raw.md';
+      raw.textContent = doc.raw;
+      body.appendChild(el('h4', null, 'Recording notes (raw merge)'));
+      var run = 0;
+      doc.blocks.forEach(function (b, bi) {
+        if (b.kind === 'said') {
+          var s = el('div', 'blk said'); s.appendChild(el('span', 'who', 'said')); var sb = el('div', 'body'), p = el('p');
+          b.cues.forEach(function (c, ci) { if (ci) p.appendChild(document.createTextNode(' ')); dangling += withRefs(p, c, 'ref', doc.resolved); });
+          sb.appendChild(p); s.appendChild(sb); body.appendChild(s); return;
+        }
+        if (b.f.repeat) {
+          run++;
+          var nextB = doc.blocks[bi + 1];
+          if (!(nextB && nextB.kind === 'shown' && nextB.f.repeat)) { body.appendChild(el('p', 'more', '+ ' + plural(run, 'more capture', 'more captures') + ' of a screen already in the file, up to ' + hhmmss(b.f.timestamp) + '. Same content, ' + plural(run, 'wasted vision call', 'wasted vision calls') + '.')); run = 0; }
+          return;
+        }
+        var d = el('div', 'blk shown'); d.appendChild(el('span', 'who', 'shown')); var db = el('div', 'body');
+        db.appendChild(el('span', 'at', 'On screen at ' + hhmmss(b.f.timestamp)));
+        var shot = el('div', 'shot'), btn = el('button'); btn.type = 'button'; btn.setAttribute('aria-label', 'Inspect the frame at ' + mmss(b.f.timestamp));
+        var c2 = document.createElement('canvas'); c2.width = 320; c2.height = 180; c2.getContext('2d').drawImage(M.samples[b.f.sample].cv, 0, 0, 320, 180);
+        btn.appendChild(c2); btn.addEventListener('click', function () { select(b.f.sample, true); $('inspect').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); });
+        shot.appendChild(btn); shot.appendChild(mdRender(b.f.content)); db.appendChild(shot); d.appendChild(db); body.appendChild(d);
+      });
+      if (!doc.frames.length) body.appendChild(el('p', 'callout calm', 'No frame had anything to extract, so this file is the transcript. The skill says so at the top of the notes rather than leaving the reader to guess.'));
+      else if (dangling) body.appendChild(el('p', 'callout', plural(dangling, 'phrase still points', 'phrases still point') + ' at a screen that is not in the file. The frame that answers ' + (dangling === 1 ? 'it' : 'them') + ' was never kept: see the bench.'));
+      cap.textContent = total
+        ? 'Built from the frames kept on the bench, in the format build_notes.py writes with --embed-images. Each phrase that pointed at the screen now has the screen next to it.'
+        : 'Built from the frames kept on the bench, in the format build_notes.py writes.';
+    }
+    raw.hidden = !st.raw; body.hidden = st.raw;
   }
 
   /* ---------- commands ---------- */
+  function shq(name) { return /^[\w.\-]+$/.test(name) ? name : "'" + name.replace(/'/g, "'\\''") + "'"; }
   function commandLines() {
-    var L = [], vis = state.screen && state.kind !== 'head';
-    if (!state.speech && !vis) return [['c', '# nothing to run with both streams off']];
-    if (state.minutes > 90) { L.push(['c', '# long recording: tune on a 10-minute slice first']); L.push(['', 'ffmpeg -ss 0 -t 600 -i recording.mp4 -c copy slice.mp4']); }
-    if (state.speech) L.push(['', 'whisper recording.mp4 --model medium --output_format vtt --output_dir work/']);
-    if (vis) {
-      if (state.kind === 'app' && state.mask) L.push(['c', '# mask the clock, taskbar and ticker before hashing: SKILL.md, "Screen recordings"']);
-      L.push(['', 'python scripts/extract_frames.py recording.mp4 --out work/ --interval ' + state.interval]);
-      L.push(['', 'python scripts/describe_frames.py work/frames.json --ocr']);
-      L.push(['', 'python scripts/build_notes.py work/frame_content.json' + (state.speech ? ' work/recording.vtt' : '') + ' --out work/notes-raw.md --embed-images']);
-      L.push(['c', '# then the synthesis pass turns notes-raw.md into notes.md']);
-    } else {
-      L.push(['c', '# no frames to read: write notes.md straight from work/recording.vtt']);
-    }
+    var own = isOwn() && M.own, file = own ? shq(M.own.name) : 'recording.mp4', stem = (own ? M.own.name : 'recording.mp4').replace(/\.[^.]+$/, '');
+    var vtt = 'work/' + shq(stem + '.vtt'), L = [];
+    L.push(['c', '# from FrameProof/skills/video-to-markdown']);
+    L.push(['', 'pip install pillow openai-whisper']);
+    L.push(['', 'export ANTHROPIC_API_KEY=sk-ant-...']);
+    L.push(['', 'whisper ' + file + ' --model medium --output_format vtt --output_dir work/']);
+    if (st.src === 'head') { L.push(['c', '# nothing on screen to extract: skip the frame steps and write notes.md from ' + vtt]); return L; }
+    L.push(['', 'python scripts/extract_frames.py ' + file + ' --out work/ --interval ' + st.interval + (st.threshold !== 6 ? ' --threshold ' + st.threshold : '')]);
+    if (activeMask().length) L.push(['c', '# extract_frames.py has no mask option: hash masked(path) instead, with the list below (SKILL.md, "Screen recordings")']);
+    L.push(['', 'python scripts/describe_frames.py work/frames.json --ocr']);
+    L.push(['', 'python scripts/build_notes.py work/frame_content.json ' + vtt + ' --out notes-raw.md --embed-images']);
+    L.push(['c', '# then have Claude rewrite notes-raw.md as notes.md (SKILL.md, Step 4)']);
     return L;
+  }
+  function maskText() {
+    var m = activeMask(); if (!m.length) return '';
+    return '# fractions of frame width and height: (x0, y0, x1, y1)\nMASK = [\n' + m.map(function (r) { return '    (' + r.map(function (v) { return v.toFixed(2); }).join(', ') + '),'; }).join('\n') + '\n]';
   }
   function renderCmd() {
     var pre = $('cmd'); pre.textContent = '';
     commandLines().forEach(function (l, i) { if (i) pre.appendChild(document.createTextNode('\n')); pre.appendChild(el('span', l[0] || null, l[1])); });
+    var mt = maskText(); $('maskCmdBox').hidden = !mt; $('maskCmd').textContent = mt;
+    $('cmdH').textContent = isOwn() ? 'Or step by step, for your recording' : 'Or step by step, for the setup on the bench';
   }
   $('copy').addEventListener('click', function () {
-    var text = commandLines().map(function (l) { return l[1]; }).join('\n'), btn = $('copy');
-    var done = function () { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
-    var fallback = function () { var r = document.createRange(); r.selectNodeContents($('cmd')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = 'Selected'; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
-    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+    var text = commandLines().map(function (l) { return l[1]; }).join('\n') + (maskText() ? '\n\n' + maskText() : ''), btn = $('copy');
+    var say = function (t) { btn.textContent = t; setTimeout(function () { btn.textContent = 'Copy'; }, 1600); };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents($('cmd')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); say('Selected'); };
+    try { navigator.clipboard.writeText(text).then(function () { say('Copied'); }, fallback); } catch (e) { fallback(); }
   });
 
-  /* ---------- 3D scene ---------- */
-  var T = window.THREE, gl = null, scene, camera, tableG, cardsG, cards = [], wave, waveCur = [], waveTgt = [], C = {}, textures = {}, polar = 1.12, dragging = false;
-  var WAVE_N = 150, X0 = -3.5, XW = 7.0, CARD_Z = -0.45, WAVE_Z = 1.55;
-
-  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-  function readColors() {
-    ['ink', 'muted', 'line', 'screen', 'speech', 'disc', 'rim', 'card', 'screen-soft'].forEach(function (k) { C[k] = css('--' + k); });
+  /* ================= 6. your own recording ================= */
+  var ownToken = 0;
+  function ownError(msg) { var e = $('ownErr'); e.textContent = msg; e.hidden = !msg; }
+  function closeOwn() {
+    ownToken++;
+    if (M.own) { try { M.own.video.removeAttribute('src'); M.own.video.load(); } catch (e) {} URL.revokeObjectURL(M.own.url); }
+    M.own = null; M.busy = false; st.userMasks = []; setDrawing(false); $('prog').hidden = true;
   }
-  function canvasTex(w, h, draw) {
-    var c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
-    var t = new T.CanvasTexture(c); t.anisotropy = 4; return t;
+  function loadOwn(file) {
+    if (!file) return;
+    ownError('');
+    if (file.type && file.type.indexOf('video/') !== 0) { ownError('That file is not a video. Choose an .mp4, .mov, .webm or .mkv recording.'); return; }
+    closeOwn();
+    var v = document.createElement('video'), url = URL.createObjectURL(file), token = ++ownToken;
+    v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.preload = 'auto';
+    var own = { video: v, url: url, name: file.name, dur: 0, w: 0, h: 0, cache: {}, n: 0, covered: 0 };
+    var failed = false, fail = function (msg) { if (failed || token !== ownToken) return; failed = true; URL.revokeObjectURL(url); ownError(msg); if (M.own === own) backToDemo(); };
+    v.addEventListener('error', function () { fail('This browser cannot decode that file' + (v.error && v.error.code === 4 ? ' (unsupported format or codec)' : '') + '. The scripts use ffmpeg and will still read it.'); });
+    v.addEventListener('loadedmetadata', function () {
+      if (token !== ownToken) return;
+      if (!v.videoWidth || !v.videoHeight) return fail('That file has no video track this browser can read.');
+      if (!isFinite(v.duration) || v.duration <= 0) return fail('This browser cannot tell how long that file is, so it cannot be sampled here. The scripts will still read it.');
+      own.dur = v.duration; own.w = v.videoWidth; own.h = v.videoHeight;
+      M.own = own; st.src = 'own'; st.sel = 0; userActed = true; setTour(false);
+      document.querySelectorAll('input[name="kind"]').forEach(function (r) { r.checked = false; });
+      sampleOwn();
+    });
+    v.src = url; try { v.load(); } catch (e) {}
+    setTimeout(function () { if (token === ownToken && !own.dur) fail('The browser did not open that file. Try another recording, or open this page outside the viewer you are in.'); }, 12000);
   }
-  function screenTex(type) {
-    return canvasTex(320, 180, function (g, w, h) {
-      g.fillStyle = C.card; g.fillRect(0, 0, w, h);
-      g.strokeStyle = C.line; g.lineWidth = 4; g.strokeRect(2, 2, w - 4, h - 4);
-      var bar = function (x, y, bw, bh, col) { g.fillStyle = col; g.fillRect(x, y, bw, bh); };
-      if (type === 'chart') {
-        bar(24, 20, 130, 10, C.ink);
-        [70, 104, 52, 122, 88].forEach(function (v, i) { bar(34 + i * 54, 158 - v, 34, v, i === 3 ? C.screen : C.muted); });
-        bar(24, 158, 272, 3, C.ink);
-      } else if (type === 'code') {
-        bar(14, 14, 292, 152, C.rim);
-        [[0, 90], [1, 150], [1, 110], [2, 130], [1, 60], [0, 40]].forEach(function (r, i) { bar(30 + r[0] * 22, 32 + i * 21, r[1], 8, i === 1 ? C.screen : '#aab2c8'); });
-      } else if (type === 'table') {
-        bar(24, 20, 100, 10, C.ink);
-        for (var r = 0; r < 4; r++) for (var c2 = 0; c2 < 3; c2++) bar(24 + c2 * 94, 50 + r * 28, c2 === 0 ? 70 : 54, 9, r === 0 ? C.screen : C.muted);
-        for (var k = 0; k < 4; k++) bar(24, 68 + k * 28, 272, 2, C.line);
-      } else if (type === 'app' || type === 'dialog') {
-        bar(4, 4, 312, 18, C.rim); bar(264, 9, 42, 8, C.speech);
-        bar(4, 22, 70, 154, C['screen-soft']);
-        for (var i = 0; i < 6; i++) { bar(14, 36 + i * 20, 46, 6, C.muted); bar(90, 36 + i * 20, 120 + (i * 37) % 80, 6, C.muted); }
-        if (type === 'dialog') { bar(100, 52, 170, 90, C.card); g.strokeStyle = C.screen; g.lineWidth = 5; g.strokeRect(100, 52, 170, 90); bar(116, 70, 110, 8, C.ink); bar(116, 90, 138, 6, C.muted); bar(206, 116, 50, 14, C.screen); }
-      } else {
-        g.fillStyle = C.muted; g.beginPath(); g.arc(160, 74, 34, 0, 7); g.fill();
-        g.beginPath(); g.ellipse(160, 176, 74, 54, 0, 0, 7); g.fill();
+  function sampleOwn() {
+    var own = M.own, v = own.video, token = ++ownToken, I = st.interval;
+    var slice = Math.min(own.dur, 600), n = clamp(Math.floor(slice / I), 1, 240);
+    own.n = n; own.covered = Math.min(own.dur, n * I);
+    M.samples = []; M.res = []; M.kept = 0; M.busy = true; st.sel = 0; cells = [];
+    if (gl3) Stage.clear();
+    $('prog').hidden = false; syncChrome(); refreshAll(false);
+    var gcv = document.createElement('canvas'); gcv.width = 256; gcv.height = 128; var gg = gcv.getContext('2d', { willReadFrequently: true });
+    var i = 0, lastPaint = 0;
+    function done() { M.busy = false; $('prog').hidden = true; refreshAll(false); }
+    function take(at) {
+      var key = at.toFixed(2), hit = own.cache[key];
+      if (!hit) {
+        var cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+        try { cv.getContext('2d').drawImage(v, 0, 0, 256, 128); gg.drawImage(cv, 0, 0); hit = own.cache[key] = { cv: cv, gray: toGray(gg.getImageData(0, 0, 256, 128).data, 256 * 128) }; }
+        catch (e) { M.busy = false; $('prog').hidden = true; ownError('The browser would not hand over that frame. Try another file.'); backToDemo(); return false; }
       }
-    });
-  }
-  function labelSprite(text, color, w) {
-    var tex = canvasTex(256, 64, function (g) {
-      g.font = '500 30px "IBM Plex Mono", ui-monospace, Menlo, monospace'; g.fillStyle = color; g.textBaseline = 'middle'; g.textAlign = 'center'; g.fillText(text, 128, 34);
-    });
-    var s = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); s.scale.set(w, w / 4, 1); return s;
-  }
-  function disposeGroup(g) {
-    g.traverse(function (o) {
-      if (o.geometry) o.geometry.dispose();
-      if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
-    });
-  }
-  function clock(t) { var m = Math.floor(t / 60), s = t % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
-
-  function buildScene() {
-    if (!gl) return;
-    readColors();
-    var rot = tableG ? tableG.rotation.y : -0.42;
-    if (tableG) { scene.remove(tableG); disposeGroup(tableG); }
-    tableG = new T.Group(); tableG.rotation.y = rot; scene.add(tableG);
-    Object.keys(KIND).forEach(function (k) { KIND[k].tex.forEach(function (n) { textures[n] = screenTex(n); }); });
-
-    var disc = new T.Mesh(new T.CylinderGeometry(5.2, 5.2, 0.2, 96), new T.MeshStandardMaterial({ color: C.disc, roughness: 0.95 }));
-    disc.position.y = -0.1; tableG.add(disc);
-    var rim = new T.Mesh(new T.CylinderGeometry(5.5, 5.5, 0.16, 96), new T.MeshStandardMaterial({ color: C.rim, roughness: 0.7 }));
-    rim.position.y = -0.27; tableG.add(rim);
-    var ticks = new T.InstancedMesh(new T.BoxGeometry(0.02, 0.01, 0.16), new T.MeshBasicMaterial({ color: C.line }), 60), d = new T.Object3D();
-    for (var i = 0; i < 60; i++) { var a = i / 60 * Math.PI * 2; d.position.set(Math.sin(a) * 4.9, 0.006, Math.cos(a) * 4.9); d.rotation.set(0, a, 0); d.updateMatrix(); ticks.setMatrixAt(i, d.matrix); }
-    tableG.add(ticks);
-
-    var railMat = new T.MeshBasicMaterial({ color: C.muted });
-    var rail = new T.Mesh(new T.BoxGeometry(XW + 0.3, 0.03, 0.05), railMat); rail.position.set(0, 0.02, CARD_Z); tableG.add(rail);
-    var rail2 = new T.Mesh(new T.BoxGeometry(XW + 0.3, 0.02, 0.02), railMat); rail2.position.set(0, 0.012, WAVE_Z); tableG.add(rail2);
-    for (var s = 0; s <= SLICE; s += 30) {
-      var x = X0 + s / SLICE * XW;
-      var tk = new T.Mesh(new T.BoxGeometry(0.02, 0.01, 0.3), railMat); tk.position.set(x, 0.006, 0.55); tableG.add(tk);
-      var lb = labelSprite(clock(s), C.muted, 1.4); lb.position.set(x, 0.3, 0.62); tableG.add(lb);
+      var s = { i: i, t: i * I, at: at, seg: null, cv: hit.cv, gray: hit.gray, gw: 256, gh: 128 };
+      s.px = resize9x8(applyMask(s.gray, 256, 128, st.userMasks), 256, 128); s.bits = dhash(s.px);
+      M.samples.push(s); if (gl3) Stage.addCard(s, n);
+      return true;
     }
-    var l1 = labelSprite('screen', C.screen, 1.5); l1.position.set(X0 - 0.8, 0.35, CARD_Z); tableG.add(l1);
-    var l2 = labelSprite('speech', C.speech, 1.5); l2.position.set(X0 - 0.8, 0.35, WAVE_Z); tableG.add(l2);
-
-    wave = new T.InstancedMesh(new T.BoxGeometry(0.026, 1, 0.026), new T.MeshBasicMaterial({ color: C.speech, transparent: true }), WAVE_N);
-    tableG.add(wave);
-    for (var w = 0; w < WAVE_N; w++) if (waveCur[w] == null) waveCur[w] = 0.03;
-    buildCards();
-  }
-
-  function buildCards() {
-    if (!gl) return;
-    if (cardsG) { tableG.remove(cardsG); cardsG.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
-    cardsG = new T.Group(); tableG.add(cardsG); cards = [];
-    var times = sampleTimes(), K = KIND[state.kind];
-    var plane = new T.PlaneGeometry(1.6, 0.9), edges = new T.EdgesGeometry(plane), stemGeo = new T.BoxGeometry(0.014, 1, 0.014);
-    times.forEach(function (t) {
-      var g = new T.Group(); g.position.set(X0 + t / SLICE * XW, 0, CARD_Z);
-      var face = new T.Mesh(plane, new T.MeshBasicMaterial({ map: textures[K.tex[segOf(t, K.cuts)]], transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false }));
-      var line = new T.LineSegments(edges, new T.LineBasicMaterial({ color: C.screen, transparent: true, opacity: 0 }));
-      face.add(line); face.rotation.y = 0.9; face.position.y = 0.55;
-      var stem = new T.Mesh(stemGeo, new T.MeshBasicMaterial({ color: C.screen, transparent: true, opacity: 0 }));
-      g.add(face); g.add(stem); cardsG.add(g);
-      cards.push({ face: face, line: line, stem: stem, y: 0.55, o: 0, k: 0, ty: 0.55, to: 0.14, tk: 0 });
-    });
-    applyTargets();
-  }
-
-  function applyTargets() {
-    var times = sampleTimes(), flags = keptFlags(times), kept = 0;
-    flags.forEach(function (f, i) {
-      if (f) kept++;
-      var c = cards[i]; if (!c) return;
-      c.ty = f ? 1.75 : 0.55; c.to = f ? 1 : (state.screen ? 0.16 : 0.07); c.tk = f ? 1 : 0;
-      c.face.material.depthWrite = f; c.face.renderOrder = f ? 2 : 1;
-    });
-    for (var i = 0; i < WAVE_N; i++) {
-      var env = Math.abs(Math.sin(i * 0.91) * Math.sin(i * 0.23 + 1)), gate = Math.sin(i * 0.085 + 0.6) > -0.55 ? 1 : 0.06;
-      waveTgt[i] = state.speech ? 0.08 + 1.3 * env * gate : 0.03;
+    function step() {
+      if (token !== ownToken) return;
+      if (i >= n) return done();
+      // the frame ffmpeg would emit for slot i: just before the middle of the slot
+      var at = clamp((i + 0.5) * I - 0.05, 0, Math.max(0, own.dur - 0.05)), key = at.toFixed(2);
+      var after = function () {
+        if (token !== ownToken) return;
+        if (!take(at)) return;
+        i++;
+        $('progText').textContent = 'Sampling ' + i + ' of ' + n; $('progBar').style.width = (100 * i / n) + '%';
+        var now = performance.now();
+        if (now - lastPaint > 240 || i === n) { lastPaint = now; rededupe(); renderReadout(); renderVerdict(); layoutStage(); if (st.view === 'sheet' || !gl3) renderSheet(); }
+        step();
+      };
+      if (own.cache[key]) return after();
+      var seeked = false, painted = false, fired = false, timer;
+      var go = function () { if (fired || !seeked || !painted) return; fired = true; clearTimeout(timer); after(); };
+      timer = setTimeout(function () { if (fired || token !== ownToken) return; fired = true; M.busy = false; $('prog').hidden = true; ownError('The browser stopped decoding at ' + mmss(at) + '. What was sampled up to there is shown.'); own.n = M.samples.length || 1; own.covered = Math.max(I, M.samples.length * I); refreshAll(false); }, 9000);
+      v.addEventListener('seeked', function () { seeked = true; setTimeout(function () { painted = true; go(); }, 140); go(); }, { once: true });
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(function () { painted = true; go(); });
+      try { v.currentTime = at; } catch (e) { seeked = painted = true; go(); }
     }
-    if (wave) wave.material.opacity = state.speech ? 1 : 0.3;
-    var tag = clock(SLICE) + ' slice · ' + times.length + ' frames sampled · ';
-    if (!state.screen) tag += 'screen off';
-    else if (state.kind === 'head') tag += '1 distinct, no content';
-    else tag += kept + ' kept';
-    $('stageTag').textContent = tag;
+    step();
   }
-
-  var dummy = null, last = 0;
-  function frame(now) {
-    requestAnimationFrame(frame);
-    var dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
-    var k = reduced ? 1 : 1 - Math.exp(-dt * 7);
-    if (state.spin && !dragging) tableG.rotation.y += dt * 0.22;
-    cards.forEach(function (c) {
-      c.y += (c.ty - c.y) * k; c.o += (c.to - c.o) * k; c.k += (c.tk - c.k) * k;
-      c.face.position.y = c.y; c.face.material.opacity = c.o; c.line.material.opacity = c.k;
-      var h = Math.max(0.01, c.y - 0.45); c.stem.scale.y = h; c.stem.position.y = h / 2; c.stem.material.opacity = c.k;
+  function sharpen(i) { // redraw the selected frame from the video at full resolution
+    var own = M.own, s = M.samples[i]; if (!own || !s || M.busy || i !== st.sel) return;
+    var v = own.video, token = ownToken;
+    v.addEventListener('seeked', function () {
+      setTimeout(function () { if (token !== ownToken || i !== st.sel || M.busy) return; var cv = $('inFrame'); try { cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height); } catch (e) {} }, 120);
+    }, { once: true });
+    try { v.currentTime = s.at; } catch (e) {}
+  }
+  function backToDemo() {
+    closeOwn(); st.src = 'slides'; $('kind-slides').checked = true; st.sel = 0; cells = [];
+    syncChrome(); resample(true);
+  }
+  var drawing = false;
+  function setDrawing(on) {
+    drawing = on; $('frameWrap').classList.toggle('drawing', on); $('maskDraw').setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('maskDraw').textContent = on ? 'Done drawing' : 'Draw a mask';
+  }
+  (function maskDrawing() {
+    var wrap = $('frameWrap'), live = null, sx = 0, sy = 0, id = null;
+    function pos(e) { var r = wrap.getBoundingClientRect(); return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1)]; }
+    wrap.addEventListener('pointerdown', function (e) {
+      if (!drawing || id !== null) return;
+      id = e.pointerId; var p = pos(e); sx = p[0]; sy = p[1];
+      live = el('div', 'mk live'); $('maskLayer').appendChild(live); try { wrap.setPointerCapture(id); } catch (x) {} e.preventDefault();
     });
-    for (var i = 0; i < WAVE_N; i++) {
-      waveCur[i] += (waveTgt[i] - waveCur[i]) * k;
-      dummy.position.set(X0 + i / (WAVE_N - 1) * XW, waveCur[i] / 2 + 0.02, WAVE_Z); dummy.scale.set(1, waveCur[i], 1); dummy.updateMatrix(); wave.setMatrixAt(i, dummy.matrix);
+    wrap.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== id || !live) return; var p = pos(e);
+      live.style.left = (Math.min(sx, p[0]) * 100) + '%'; live.style.top = (Math.min(sy, p[1]) * 100) + '%';
+      live.style.width = (Math.abs(p[0] - sx) * 100) + '%'; live.style.height = (Math.abs(p[1] - sy) * 100) + '%';
+    });
+    var end = function (e) {
+      if (e.pointerId !== id) return; id = null; var p = pos(e);
+      var m = [Math.min(sx, p[0]), Math.min(sy, p[1]), Math.max(sx, p[0]), Math.max(sy, p[1])]; live = null;
+      if (e.type === 'pointerup' && m[2] - m[0] > 0.02 && m[3] - m[1] > 0.015 && st.userMasks.length < 8) { st.userMasks.push(m.map(function (v) { return Math.round(v * 100) / 100; })); remask(); }
+      else renderMaskLayer();
+    };
+    wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
+    $('maskDraw').addEventListener('click', function () { setDrawing(!drawing); });
+    $('maskClear').addEventListener('click', function () { st.userMasks = []; remask(); });
+  })();
+  function remask() { rehash(); refreshAll(false); }
+
+  /* ================= 7. wiring ================= */
+  function syncChrome() {
+    var own = isOwn();
+    $('ownRow').hidden = own; $('ownChip').hidden = !own;
+    if (own && M.own) { $('ownName').textContent = M.own.name; $('ownMeta').textContent = '· ' + mmss(M.own.dur) + ' long · ' + M.own.w + ' × ' + M.own.h; }
+    $('kindHelp').textContent = own ? 'Sampled from your file in this tab. Nothing leaves it, and this page cannot read speech or run the vision step.' : REC[st.src].help;
+    $('maskRow').hidden = st.src !== 'app'; $('maskTools').hidden = !own;
+    $('thrOut').textContent = st.threshold + ' of 64 bits' + (st.threshold === 6 ? ' (the default)' : '');
+    $('tour').hidden = !gl3 || own || st.view === 'sheet';
+  }
+  function refreshAll(dealt) {
+    if (!dealt) layoutStage();
+    if (st.view === 'sheet' || !gl3) { if (cells.length !== M.samples.length) renderSheet(); else markSheet(); }
+    renderTicks(); renderReadout(); renderVerdict(); renderInspector(); renderCaption(); renderSpeech(); renderDoc(); renderCmd();
+  }
+  function resample(deal) {
+    if (isOwn()) { sampleOwn(); return; }
+    var keepT = M.samples[st.sel] ? M.samples[st.sel].t : 0;
+    buildDemoSamples(); rehash(); rededupe(); cells = [];
+    var best = 0; M.samples.forEach(function (s, i) { if (s.t <= keepT + 0.01) best = i; }); st.sel = clamp(best, 0, M.samples.length - 1);
+    if (!M.res[st.sel].kept) { for (var j = st.sel; j >= 0; j--) if (M.res[j].kept) { st.sel = j; break; } }
+    clearTimeout(dealTimer);
+    if (gl3) {
+      Stage.setSamples(M.samples, deal);
+      if (deal && !reduced && st.view === 'piles') { Stage.layout(M.res, 'spread', -1); dealTimer = setTimeout(layoutStage, 950); }
+      else layoutStage();
     }
-    wave.instanceMatrix.needsUpdate = true;
-    gl.render(scene, camera);
+    refreshAll(true);
   }
-  function placeCamera() {
-    var st = $('stage'), w = st.clientWidth, h = st.clientHeight; if (!w || !h) return;
-    gl.setSize(w, h, false); camera.aspect = w / h;
-    var half = Math.tan(T.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
-    var R = Math.max(12, 5.7 / half);
-    camera.position.set(0, R * Math.cos(polar) + 0.2, R * Math.sin(polar)); camera.lookAt(0, 0.2, 0); camera.updateProjectionMatrix();
+  function select(i, byUser) {
+    if (i < 0 || i >= M.samples.length) return;
+    if (byUser) { userActed = true; setTour(false); }
+    st.sel = i; layoutStage(); markSheet(); renderTicks(); renderInspector(); renderCaption(); renderSpeech();
   }
-  function initScene() {
-    if (!T) throw new Error('three.js did not load');
-    var canvas = $('gl');
-    gl = new T.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
-    gl.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    scene = new T.Scene(); camera = new T.PerspectiveCamera(32, 1, 0.1, 100); dummy = new T.Object3D();
-    scene.add(new T.HemisphereLight(0xffffff, 0x8088a0, 0.95));
-    var sun = new T.DirectionalLight(0xffffff, 0.45); sun.position.set(4, 10, 6); scene.add(sun);
-    buildScene(); placeCamera();
-    new ResizeObserver(placeCamera).observe($('stage'));
+  var tourTimer = 0;
+  function setTour(on) {
+    st.tour = on && !reduced; $('tour').textContent = st.tour ? 'Pause tour' : 'Play tour';
+    clearInterval(tourTimer);
+    if (st.tour) tourTimer = setInterval(function () {
+      if (document.hidden || isOwn() || M.kept < 2) return;
+      var n = M.samples.length; for (var k = 1; k <= n; k++) { var j = (st.sel + k) % n; if (M.res[j].kept) { select(j, false); break; } }
+    }, 4200);
+  }
+  $('tour').addEventListener('click', function () { userActed = true; setTour(!st.tour); });
 
-    var px = 0, py = 0;
-    canvas.addEventListener('pointerdown', function (e) { dragging = true; px = e.clientX; py = e.clientY; canvas.classList.add('dragging'); try { canvas.setPointerCapture(e.pointerId); } catch (x) {} });
-    canvas.addEventListener('pointermove', function (e) {
-      if (!dragging) return;
-      tableG.rotation.y += (e.clientX - px) * 0.008;
-      if (e.pointerType === 'mouse') { polar = Math.min(1.42, Math.max(0.55, polar - (e.clientY - py) * 0.005)); placeCamera(); }
-      px = e.clientX; py = e.clientY;
-    });
-    var end = function () { dragging = false; canvas.classList.remove('dragging'); };
-    canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
-    canvas.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowLeft') { tableG.rotation.y -= 0.15; e.preventDefault(); }
-      if (e.key === 'ArrowRight') { tableG.rotation.y += 0.15; e.preventDefault(); }
-    });
-    var retheme = function () { buildScene(); };
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
-    new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(retheme);
-    requestAnimationFrame(frame);
-  }
-
-  /* ---------- wiring ---------- */
-  function setSpinLabel() { $('spin').textContent = state.spin ? 'Pause rotation' : 'Resume rotation'; }
-  $('spin').addEventListener('click', function () { state.spin = !state.spin; setSpinLabel(); });
-  function refresh(rebuild) {
-    renderPanel(); renderNotes(); renderCmd();
-    if (gl) { if (rebuild) buildCards(); else applyTargets(); }
-  }
-  $('panel').addEventListener('submit', function (e) { e.preventDefault(); });
-  $('panel').addEventListener('input', function (e) {
-    var t = e.target, rebuild = false;
-    if (t.name === 'kind') { state.kind = t.value; rebuild = true; }
-    else if (t.name === 'interval') { state.interval = +t.value; rebuild = true; }
-    else if (t.id === 'speech') state.speech = t.checked;
-    else if (t.id === 'screen') state.screen = t.checked;
-    else if (t.id === 'mask') state.mask = t.checked;
-    else if (t.id === 'minutes') state.minutes = +t.value;
-    refresh(rebuild);
+  $('controls').addEventListener('submit', function (e) { e.preventDefault(); });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.name) return;
+    if (t.name === 'kind') { userActed = true; if (isOwn()) closeOwn(); st.src = t.value; st.sel = 0; syncChrome(); resample(true); }
+    else if (t.name === 'interval') { userActed = true; st.interval = +t.value; syncChrome(); resample(true); }
+    else if (t.name === 'view') { st.view = t.value; syncChrome(); applyView(); if (st.view !== 'sheet') renderSpeech(); }
+    else if (t.name === 'fileMode') { st.fileMode = t.value; renderDoc(); }
   });
-  // pick up form values the browser or a republish restored
-  var k0 = document.querySelector('input[name="kind"]:checked'), i0 = document.querySelector('input[name="interval"]:checked');
-  if (k0) state.kind = k0.value; if (i0) state.interval = +i0.value;
-  state.speech = $('speech').checked; state.screen = $('screen').checked; state.mask = $('mask').checked; state.minutes = +$('minutes').value;
+  $('thr').addEventListener('input', function () { userActed = true; st.threshold = +this.value; syncChrome(); rededupe(); refreshAll(false); });
+  $('mask').addEventListener('change', function () { userActed = true; st.mask = this.checked; rehash(); rededupe(); refreshAll(false); });
+  $('rawView').addEventListener('change', function () { st.raw = this.checked; renderDoc(); });
+  $('scrub').addEventListener('input', function () { select(+this.value, true); });
+  $('prev').addEventListener('click', function () { select(st.sel - 1, true); });
+  $('next').addEventListener('click', function () { select(st.sel + 1, true); });
+  $('pick').addEventListener('click', function () { $('fileIn').click(); });
+  $('heroPick').addEventListener('click', function () { $('bench').scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' }); $('fileIn').click(); });
+  $('fileIn').addEventListener('change', function () { loadOwn(this.files && this.files[0]); this.value = ''; });
+  $('ownBack').addEventListener('click', backToDemo);
+  $('progCancel').addEventListener('click', function () { ownToken++; M.busy = false; $('prog').hidden = true; if (M.own) { M.own.n = Math.max(1, M.samples.length); M.own.covered = Math.max(st.interval, M.samples.length * st.interval); } if (!M.samples.length) backToDemo(); else { rededupe(); refreshAll(false); } });
+  (function dropTarget() {
+    var stage = $('stage'), depth = 0;
+    function hasFile(e) { var t = e.dataTransfer && e.dataTransfer.types; return t && Array.prototype.indexOf.call(t, 'Files') >= 0; }
+    stage.addEventListener('dragenter', function (e) { if (!hasFile(e)) return; depth++; $('drop').hidden = false; e.preventDefault(); });
+    stage.addEventListener('dragover', function (e) { if (hasFile(e)) e.preventDefault(); });
+    stage.addEventListener('dragleave', function () { depth = Math.max(0, depth - 1); if (!depth) $('drop').hidden = true; });
+    stage.addEventListener('drop', function (e) { depth = 0; $('drop').hidden = true; if (!hasFile(e)) return; e.preventDefault(); loadOwn(e.dataTransfer.files[0]); });
+  })();
+  if (mqReduced.addEventListener) mqReduced.addEventListener('change', function (e) { reduced = e.matches; if (reduced) setTour(false); });
 
-  setSpinLabel();
-  try { initScene(); }
-  catch (err) { gl = null; $('gl').hidden = true; $('spin').hidden = true; $('stageHint').hidden = true; $('nogl').hidden = false; }
-  refresh(false);
+  // pick up form values the browser or a republish restored
+  var k0 = document.querySelector('input[name="kind"]:checked'), i0 = document.querySelector('input[name="interval"]:checked'), f0 = document.querySelector('input[name="fileMode"]:checked');
+  if (k0) st.src = k0.value; else $('kind-slides').checked = true;
+  if (i0) st.interval = +i0.value; if (f0) st.fileMode = f0.value;
+  st.threshold = +$('thr').value || 6; st.mask = $('mask').checked; st.raw = $('rawView').checked;
+  $('view-sheet').checked = true;
+
+  /* ---------- start: everything works before (and without) the 3D library ---------- */
+  syncChrome(); applyView(); resample(false);
+
+  function start3D() {
+    if (gl3 || !window.THREE) return;
+    try {
+      Stage.init(window.THREE, function (i) {
+        if (i === -2) { $('stageNote').hidden = false; $('stageNote').textContent = 'The 3D view lost its graphics context. Showing the sheet.'; gl3 = false; st.view = 'sheet'; $('view-sheet').checked = true; syncChrome(); applyView(); return; }
+        if (i === -3) { $('stageNote').hidden = true; gl3 = true; $('view-piles').checked = true; st.view = 'piles'; syncChrome(); applyView(); renderSpeech(); return; }
+        select(i, true);
+      });
+    } catch (err) { no3D('This browser has WebGL turned off, so the 3D deck is replaced by the sheet. Everything else works.'); return; }
+    gl3 = true;
+    $('view-piles').disabled = false; $('view-spread').disabled = false; $('view-piles').checked = true; st.view = 'piles';
+    syncChrome(); applyView();
+    Stage.setSamples(M.samples, !isOwn());
+    if (!reduced && !isOwn()) { Stage.layout(M.res, 'spread', -1); dealTimer = setTimeout(layoutStage, 950); } else layoutStage();
+    renderSpeech(); renderCaption();
+    setTour(st.tour && !userActed);
+  }
+  function no3D(msg) { $('stageNote').hidden = false; $('stageNote').textContent = msg; $('views').hidden = true; }
+  var lib = $('three-lib');
+  if (window.THREE) start3D();
+  else {
+    lib.addEventListener('load', start3D);
+    lib.addEventListener('error', function () { no3D('The 3D library did not load, so the deck is shown as a sheet. Everything else works.'); });
+    setTimeout(function () { if (!gl3 && !window.THREE) no3D('The 3D library has not loaded, so the deck is shown as a sheet. Everything else works.'); else start3D(); }, 9000);
+  }
+  // frames are drawn with the page fonts: redraw once they are in, so the pixels (and the hashes) settle
+  if (document.fonts && document.fonts.load) {
+    Promise.all(['700 12px Archivo', '500 12px Archivo', '800 12px Archivo', '500 12px "IBM Plex Mono"', '600 12px "IBM Plex Mono"'].map(function (f) { return document.fonts.load(f); }))
+      .then(function () { if (!isOwn()) resample(false); }, function () {});
+  }
+  window.frameproof = { state: st, model: M, dhash: dhash, resize9x8: resize9x8, toGray: toGray, dedupe: dedupe, records: REC, drawFrame: drawFrame };
 })();
 </script>
 </body>
