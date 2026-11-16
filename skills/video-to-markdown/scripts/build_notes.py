@@ -14,7 +14,9 @@ import json
 import re
 from pathlib import Path
 
-TS = re.compile(r"(\d{2}):(\d{2}):(\d{2})[.,](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[.,](\d{3})")
+# Cue start time. The hours field is optional: Whisper's own .vtt writes
+# "00:02.000 --> 00:06.500" for anything in the first hour.
+TS = re.compile(r"(?:(\d{2,}):)?(\d{2}):(\d{2})[.,](\d{3})\s*-->")
 
 
 def parse_transcript(path):
@@ -23,26 +25,27 @@ def parse_transcript(path):
     cues, start, buf = [], None, []
 
     def flush():
+        nonlocal start, buf
         if start is not None and buf:
             text = " ".join(b.strip() for b in buf if b.strip())
             text = re.sub(r"<[^>]+>", "", text)          # strip VTT inline tags
             text = re.sub(r"\s+", " ", text).strip()
             if text:
                 cues.append((start, text))
+        start, buf = None, []
 
     for line in lines:
         m = TS.search(line)
         if m:
             flush()
-            buf = []
-            h, mi, s, ms = (int(m.group(i)) for i in range(1, 5))
+            h, mi, s, ms = (int(g or 0) for g in m.groups())
             start = h * 3600 + mi * 60 + s + ms / 1000
-        elif line.strip().isdigit() and not buf:
-            continue                                       # SRT cue number
-        elif line.strip().upper().startswith("WEBVTT"):
-            continue
-        else:
+        elif not line.strip():
+            flush()                                        # a blank line ends the cue
+        elif start is not None:
             buf.append(line)
+        # Anything outside a cue is not speech: the WEBVTT header, SRT cue
+        # numbers, VTT cue identifiers and NOTE blocks.
     flush()
 
     # Auto-captions repeat rolling text; drop cues fully contained in the previous.
