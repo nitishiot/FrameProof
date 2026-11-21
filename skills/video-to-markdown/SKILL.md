@@ -33,7 +33,7 @@ Confirm the input and the goal, because they change the settings:
    - *Talking head / interview* — almost no visual work; consider skipping
      Steps 2–3 entirely.
    - *Slide deck or chart-heavy demo* — the case this skill is built for.
-   - *Screen recording of an application* (IDE, trading terminal, dashboard,
+   - *Screen recording of an application* (IDE, terminal, dashboard,
      CAD tool) — the visuals matter, but the default dedupe misbehaves. Read
      "Screen recordings" under Step 2 before running it.
 2. **What should the output be?** A faithful record of everything said and
