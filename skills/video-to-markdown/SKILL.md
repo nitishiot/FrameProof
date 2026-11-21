@@ -33,7 +33,7 @@ Confirm the input and the goal, because they change the settings:
    - *Talking head / interview* — almost no visual work; consider skipping
      Steps 2–3 entirely.
    - *Slide deck or chart-heavy demo* — the case this skill is built for.
-   - *Screen recording of an application* (IDE, trading terminal, dashboard,
+   - *Screen recording of an application* (IDE, terminal, dashboard,
      CAD tool) — the visuals matter, but the default dedupe misbehaves. Read
      "Screen recordings" under Step 2 before running it.
 2. **What should the output be?** A faithful record of everything said and
@@ -363,7 +363,7 @@ pipeline per chunk, and concatenate before the synthesis pass.
 **A series or course.** Tune on one short slice, confirm the settings with the
 user, then run the rest with those settings fixed. Produce one `.md` per
 recording — a 2-hour lecture is roughly 20,000 words, which fits one context
-window comfortably, while a 19-part course does not fit at all. Once the set
+window comfortably, while a long series does not fit at all. Once the set
 is complete, offer a master index: one file with a paragraph per recording,
 its topics, and timestamp pointers. The user then supplies the index plus the
 one or two files it points at, which is what makes cross-video questions
